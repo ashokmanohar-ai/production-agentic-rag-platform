@@ -139,6 +139,14 @@ GET /api/v1/evaluations/compare/{baseline_id}/{current_id}
 
 History exposes quality and latency trends. Run detail returns every case result and trace ID. Comparison calculates baseline-to-current deltas for pass rate, retrieval quality, ranking quality, answer relevance, citation correctness, safety and latency, and explicitly flags a pass-rate quality decrease.
 
+## Security and tenant isolation
+
+Phase 10 introduces an initial enterprise security boundary. Authentication can be enabled with `AUTH_ENABLED=true` and a SHA-256 hash of an API key in `API_KEY_SHA256`. Authenticated requests carry explicit tenant, project and role context through headers. Roles are `reader`, `contributor` and `admin`.
+
+The RAG ask API requires reader access and the direct ingestion API requires contributor access. Tenant and project values used by those APIs are overwritten from the authenticated security context rather than trusted from request content. Indexed chunks include tenant/project metadata and OpenSearch retrieval applies mandatory tenant/project filters.
+
+This is a reference security slice, not a complete enterprise identity system. Production deployment should replace the shared API-key mechanism with an OIDC/JWT identity provider, persist tenant/project authorization assignments, add audit-log persistence, protect all management/dashboard endpoints, and validate isolation against a live OpenSearch/PostgreSQL environment.
+
 ## Advanced semantic evaluation
 
 Phase 9 adds an optional LLM-as-a-Judge layer on top of the deterministic evaluation engine. Set `judge_enabled=true` and provide `judge_model` in an evaluation request to score faithfulness, groundedness, completeness, context relevance, hallucination risk and robustness.
