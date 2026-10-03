@@ -119,6 +119,8 @@ class DurableKnowledgeService:
                         title=document.filename,
                         text=text,
                         category=document.category,
+                        tenant_id=document.tenant_id,
+                        project_id=document.project_id,
                     )
                 ]
             )
