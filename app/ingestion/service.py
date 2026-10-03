@@ -1,3 +1,4 @@
+from app.cache.redis_cache import RedisCache
 from app.embeddings.base import EmbeddingProvider
 from app.ingestion.chunking import chunk_text
 from app.ingestion.models import IngestDocument, IngestResponse
@@ -11,11 +12,13 @@ class IngestionService:
         embeddings: EmbeddingProvider,
         chunk_size: int = 1200,
         overlap: int = 200,
+        cache: RedisCache | None = None,
     ) -> None:
         self.index = index
         self.embeddings = embeddings
         self.chunk_size = chunk_size
         self.overlap = overlap
+        self.cache = cache
 
     async def ingest(self, documents: list[IngestDocument]) -> IngestResponse:
         await self.index.ensure_index()
@@ -43,6 +46,8 @@ class IngestionService:
                     }
                 )
         indexed = await self.index.index_chunks(records)
+        if self.cache:
+            await self.cache.invalidate_rag()
         return IngestResponse(
             documents_indexed=len(documents),
             chunks_indexed=indexed,
