@@ -53,7 +53,8 @@ async def test_upload_worker_retry_reindex_and_delete() -> None:
     reindex = svc.reindex(response.document_id)
     assert reindex.operation == "reindex"
     await svc.process_next()
-    assert response.document_id in svc.index.deleted
+    # Reindex is non-destructive: existing chunks stay available until replacement ingest succeeds.
+    assert response.document_id not in svc.index.deleted
 
     assert await svc.delete(response.document_id)
     assert svc.get(response.document_id) is None
@@ -66,3 +67,37 @@ async def test_duplicate_upload_returns_existing_document() -> None:
     second = await svc.upload(UploadFile(filename="b.txt", file=BytesIO(b"same")))
     assert second.status == "duplicate"
     assert second.duplicate_of == first.document_id
+
+
+class FailingIngestion:
+    index = FakeIndex()
+
+    async def ingest(self, documents):
+        raise RuntimeError("temporary outage")
+
+
+@pytest.mark.asyncio
+async def test_transient_failure_requeues_document_until_attempt_limit() -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    repo = KnowledgeRepository(sessionmaker(bind=engine, expire_on_commit=False, class_=Session))
+    ingestion = FailingIngestion()
+    svc = DurableKnowledgeService(repo, ingestion, ingestion.index, 1000)
+    response = await svc.upload(UploadFile(filename="retry.txt", file=BytesIO(b"retry me")))
+    first = await svc.process_next()
+    assert first.status == "queued"
+    assert svc.get(response.document_id).status == "queued"
+    await svc.process_next()
+    final = await svc.process_next()
+    assert final.status == "failed"
+    assert svc.get(response.document_id).status == "failed"
+
+
+def test_retry_does_not_create_duplicate_active_job() -> None:
+    svc = service()
+    document = svc.repository.create_document(
+        "logical", "a.txt", "text/plain", "retry-hash", 3, None, b"abc"
+    )
+    first = svc.retry(document.id)
+    second = svc.retry(document.id)
+    assert second.job_id == first.job_id
