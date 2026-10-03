@@ -6,15 +6,19 @@ from app.embeddings.ollama import OllamaEmbeddingProvider
 from app.ingestion.models import IngestRequest, IngestResponse
 from app.ingestion.opensearch_index import OpenSearchChunkIndex
 from app.ingestion.service import IngestionService
+from app.knowledge.durable_models import DurableDocument, DurableUploadResponse, JobRecord
+from app.knowledge.durable_service import DurableKnowledgeService
 from app.knowledge.models import DocumentRecord, UploadResponse
 from app.knowledge.registry import DocumentRegistry
 from app.knowledge.service import KnowledgeService
 from app.llm.ollama import OllamaProvider
 from app.models import AskRequest, AskResponse, FeedbackRequest
+from app.persistence.database import build_session_factory
+from app.persistence.repository import KnowledgeRepository
 from app.retrieval.opensearch import OpenSearchRetriever
 from app.services.agentic_rag import AgenticRAGService
 
-app = FastAPI(title="Production Agentic RAG Platform", version="1.3.0")
+app = FastAPI(title="Production Agentic RAG Platform", version="1.4.0")
 document_registry = DocumentRegistry()
 
 
@@ -63,6 +67,15 @@ def get_knowledge_service(
     settings: Settings = Depends(get_settings),
 ) -> KnowledgeService:
     return KnowledgeService(document_registry, ingestion, settings.max_upload_bytes)
+
+
+def get_durable_knowledge_service(
+    settings: Settings = Depends(get_settings),
+) -> DurableKnowledgeService:
+    ingestion = get_ingestion_service(settings)
+    sessions = build_session_factory(settings.database_url)
+    repository = KnowledgeRepository(sessions)
+    return DurableKnowledgeService(repository, ingestion, ingestion.index, settings.max_upload_bytes)
 
 
 @app.get("/api/v1/health")
@@ -114,6 +127,92 @@ async def get_document(
     if record is None:
         raise HTTPException(status_code=404, detail="Document not found")
     return record
+
+
+
+@app.post("/api/v1/durable/documents/upload", response_model=DurableUploadResponse)
+async def durable_upload_document(
+    file: UploadFile = File(...),
+    category: str | None = Form(default=None),
+    service: DurableKnowledgeService = Depends(get_durable_knowledge_service),
+) -> DurableUploadResponse:
+    try:
+        return await service.upload(file, category)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/v1/durable/documents", response_model=list[DurableDocument])
+async def durable_list_documents(
+    service: DurableKnowledgeService = Depends(get_durable_knowledge_service),
+) -> list[DurableDocument]:
+    return service.list()
+
+
+@app.get("/api/v1/durable/documents/{document_id}", response_model=DurableDocument)
+async def durable_get_document(
+    document_id: str,
+    service: DurableKnowledgeService = Depends(get_durable_knowledge_service),
+) -> DurableDocument:
+    record = service.get(document_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return record
+
+
+@app.get("/api/v1/durable/documents/{document_id}/versions", response_model=list[DurableDocument])
+async def durable_document_versions(
+    document_id: str,
+    service: DurableKnowledgeService = Depends(get_durable_knowledge_service),
+) -> list[DurableDocument]:
+    record = service.get(document_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return service.versions(record.logical_id)
+
+
+@app.post("/api/v1/durable/documents/{document_id}/retry", response_model=JobRecord)
+async def durable_retry_document(
+    document_id: str,
+    service: DurableKnowledgeService = Depends(get_durable_knowledge_service),
+) -> JobRecord:
+    try:
+        return service.retry(document_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Document not found") from exc
+
+
+@app.post("/api/v1/durable/documents/{document_id}/reindex", response_model=JobRecord)
+async def durable_reindex_document(
+    document_id: str,
+    service: DurableKnowledgeService = Depends(get_durable_knowledge_service),
+) -> JobRecord:
+    try:
+        return service.reindex(document_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Document not found") from exc
+
+
+@app.delete("/api/v1/durable/documents/{document_id}")
+async def durable_delete_document(
+    document_id: str,
+    service: DurableKnowledgeService = Depends(get_durable_knowledge_service),
+) -> dict[str, bool]:
+    deleted = await service.delete(document_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return {"deleted": True}
+
+
+@app.get("/api/v1/durable/jobs/{job_id}", response_model=JobRecord)
+async def durable_get_job(
+    job_id: str,
+    service: DurableKnowledgeService = Depends(get_durable_knowledge_service),
+) -> JobRecord:
+    job = service.job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
 
 
 @app.post("/api/v1/feedback")
