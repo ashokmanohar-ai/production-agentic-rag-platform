@@ -1,6 +1,19 @@
 from fastapi.testclient import TestClient
-from app.main import app
+from app.main import app, get_service
+from app.retrieval.memory import InMemoryRetriever
+from app.services.agentic_rag import AgenticRAGService
 
+
+class FakeLLM:
+    async def generate(self, prompt: str, model: str) -> str:
+        return "test answer"
+
+
+def fake_service() -> AgenticRAGService:
+    return AgenticRAGService(InMemoryRetriever([]), FakeLLM(), max_attempts=1)
+
+
+app.dependency_overrides[get_service] = fake_service
 client = TestClient(app)
 
 
