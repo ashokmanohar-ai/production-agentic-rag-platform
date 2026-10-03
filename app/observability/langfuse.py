@@ -53,21 +53,21 @@ class LangfuseObservability:
         if not self.client:
             return nullcontext()
         if observation_type == "generation":
-            manager = self.client.start_as_current_observation(
+            generation_manager = self.client.start_as_current_observation(
                 as_type="generation",
                 name=name,
                 input=input_data,
                 model=model,
                 metadata=metadata,
             )
-        else:
-            manager = self.client.start_as_current_observation(
-                as_type=observation_type,
-                name=name,
-                input=input_data,
-                metadata=metadata,
-            )
-        return cast(AbstractContextManager[Any], manager)
+            return cast(AbstractContextManager[Any], generation_manager)
+        observation_manager = self.client.start_as_current_observation(
+            as_type=observation_type,
+            name=name,
+            input=input_data,
+            metadata=metadata,
+        )
+        return cast(AbstractContextManager[Any], observation_manager)
 
     def score(self, trace_id: str, value: float, comment: str | None) -> None:
         if not self.client:
