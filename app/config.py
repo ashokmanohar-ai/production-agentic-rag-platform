@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     langfuse_host: str = "http://localhost:3000"
     langfuse_public_key: str | None = None
     langfuse_secret_key: str | None = None
+    auth_enabled: bool = False
+    api_key_sha256: str | None = None
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
