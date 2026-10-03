@@ -1,9 +1,11 @@
 from uuid import uuid4
+
 from app.agent.context import RuntimeContext
 from app.agent.graph import AgenticRAGGraph
+from app.agent.state import AgentState
+from app.llm.base import LLMProvider
 from app.models import AskRequest, AskResponse
 from app.retrieval.base import Retriever
-from app.llm.base import LLMProvider
 
 
 class AgenticRAGService:
@@ -28,7 +30,7 @@ class AgenticRAGService:
             max_retrieval_attempts=self.max_attempts,
             guardrail_threshold=self.guardrail_threshold,
         )
-        initial = {
+        initial: AgentState = {
             "original_query": request.query,
             "active_query": request.query,
             "retrieval_attempts": 0,
