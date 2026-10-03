@@ -30,7 +30,7 @@ from app.retrieval.base import Retriever
 from app.retrieval.opensearch import OpenSearchRetriever
 from app.services.agentic_rag import AgenticRAGService
 
-app = FastAPI(title="Production Agentic RAG Platform", version="1.8.0")
+app = FastAPI(title="Production Agentic RAG Platform", version="1.9.0")
 document_registry = DocumentRegistry()
 
 
@@ -145,8 +145,10 @@ async def run_evaluation(
     request: EvaluationRequest,
     service: AgenticRAGService = Depends(get_service),
     repository: EvaluationRepository = Depends(get_evaluation_repository),
+    settings: Settings = Depends(get_settings),
 ) -> EvaluationSummary:
-    summary = await EvaluationRunner(service).run(request)
+    judge_llm: LLMProvider | None = OllamaProvider(settings.ollama_url) if request.judge_enabled else None
+    summary = await EvaluationRunner(service, judge_llm).run(request)
     repository.save(summary)
     return summary
 
