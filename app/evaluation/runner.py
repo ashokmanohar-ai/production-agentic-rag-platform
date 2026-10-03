@@ -91,6 +91,12 @@ class EvaluationRunner:
             )
         count = len(results)
         passed_cases = sum(item.passed for item in results)
+        judged = [item for item in results if item.judge_available]
+
+        def judged_mean(field: str) -> float | None:
+            values = [getattr(item, field) for item in judged if getattr(item, field) is not None]
+            return mean(values) if values else None
+
         return EvaluationSummary(
             dataset_name=request.dataset.name,
             dataset_version=request.dataset.version,
@@ -104,6 +110,13 @@ class EvaluationRunner:
             mean_answer_relevance=mean(item.answer_relevance for item in results),
             mean_citation_correctness=mean(item.citation_correctness for item in results),
             mean_safety=mean(item.safety for item in results),
+            mean_faithfulness=judged_mean("faithfulness"),
+            mean_groundedness=judged_mean("groundedness"),
+            mean_completeness=judged_mean("completeness"),
+            mean_context_relevance=judged_mean("context_relevance"),
+            mean_hallucination=judged_mean("hallucination"),
+            mean_robustness=judged_mean("robustness"),
+            judge_coverage=len(judged) / count,
             mean_latency_ms=mean(item.latency_ms for item in results),
             regression_gate_passed=passed_cases == count,
             results=results,
