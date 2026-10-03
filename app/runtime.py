@@ -60,7 +60,7 @@ class RuntimeDiagnostics:
 
     async def _ollama(self) -> DependencyStatus:
         try:
-            async with httpx.AsyncClient(timeout=self.settings.runtime_health_timeout_seconds) as client:
+            async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(f"{self.settings.ollama_url.rstrip('/')}/api/tags")
                 response.raise_for_status()
                 models = {
