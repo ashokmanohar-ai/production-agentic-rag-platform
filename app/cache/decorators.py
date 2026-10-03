@@ -11,10 +11,12 @@ class CachedRetriever:
         retriever: Retriever,
         cache: RedisCache,
         observability: LangfuseObservability,
+        namespace_version: str = "v1",
     ) -> None:
         self.retriever = retriever
         self.cache = cache
         self.observability = observability
+        self.namespace_version = namespace_version
 
     async def search(self, query: str, context: RuntimeContext) -> list[dict[str, object]]:
         payload: dict[str, object] = {
@@ -22,6 +24,9 @@ class CachedRetriever:
             "top_k": context.top_k,
             "hybrid": context.use_hybrid,
             "categories": list(context.categories),
+            "tenant_id": context.tenant_id,
+            "project_id": context.project_id,
+            "namespace_version": self.namespace_version,
         }
         key = self.cache.key("retrieval", payload)
         cached = await self.cache.get_json(key)

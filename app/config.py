@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     opensearch_neural_model_id: str | None = None
     opensearch_vector_field: str = "embedding"
     opensearch_search_pipeline: str | None = None
+    retrieval_cache_version: str = "v1"
     redis_url: str = "redis://localhost:6379/0"
     cache_enabled: bool = True
     cache_ttl_seconds: int = 300

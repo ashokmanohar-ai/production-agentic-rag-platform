@@ -18,6 +18,15 @@ class OpenSearchChunkIndex:
     async def ensure_index(self) -> None:
         exists = await asyncio.to_thread(self.client.indices.exists, index=self.index)
         if exists:
+            mapping = await asyncio.to_thread(self.client.indices.get_mapping, index=self.index)
+            properties = mapping[self.index]["mappings"].get("properties", {})
+            vector = properties.get(self.vector_field, {})
+            actual = vector.get("dimension")
+            if actual != self.dimensions:
+                raise RuntimeError(
+                    f"OpenSearch vector dimension {actual} does not match configured dimension "
+                    f"{self.dimensions}"
+                )
             return
         body: dict[str, object] = {
             "settings": {"index": {"knn": True}},
