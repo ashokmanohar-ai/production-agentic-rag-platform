@@ -31,8 +31,9 @@ from app.retrieval.base import Retriever
 from app.retrieval.opensearch import OpenSearchRetriever
 from app.services.agentic_rag import AgenticRAGService
 from app.security import SecurityContext, get_security_context, require_role
+from app.runtime import RuntimeDiagnostics
 
-app = FastAPI(title="Production Agentic RAG Platform", version="1.12.0")
+app = FastAPI(title="Production Agentic RAG Platform", version="1.13.0")
 document_registry = DocumentRegistry()
 
 
@@ -128,6 +129,15 @@ def get_durable_knowledge_service(
 @app.get("/api/v1/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/v1/ready")
+async def ready(settings: Settings = Depends(get_settings)) -> dict[str, object]:
+    diagnostics = RuntimeDiagnostics(settings, build_session_factory(settings.database_url))
+    result = await diagnostics.check()
+    if result["status"] != "ready":
+        raise HTTPException(status_code=503, detail=result)
+    return result
 
 
 @app.post("/api/v1/ask", response_model=AskResponse)
