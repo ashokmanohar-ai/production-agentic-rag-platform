@@ -90,6 +90,27 @@ Uploads are validated by extension and size, hashed with SHA-256 for duplicate d
 
 FastAPI background tasks are used for this reference implementation. The registry is intentionally in-process and therefore non-durable; production deployments should replace it with PostgreSQL/another durable store and a persistent job queue.
 
+## Durable ingestion (Phase 3B)
+
+A PostgreSQL-backed document registry and job queue are now available under `/api/v1/durable`. The standalone worker claims queued jobs transactionally, processes retained source bytes, and records retry state.
+
+Key operations:
+
+```text
+POST   /api/v1/durable/documents/upload
+GET    /api/v1/durable/documents
+GET    /api/v1/durable/documents/{id}
+GET    /api/v1/durable/documents/{id}/versions
+POST   /api/v1/durable/documents/{id}/retry
+POST   /api/v1/durable/documents/{id}/reindex
+DELETE /api/v1/durable/documents/{id}
+GET    /api/v1/durable/jobs/{job_id}
+```
+
+Docker Compose includes PostgreSQL and a dedicated ingestion worker. Job claiming uses database row locking with skip-locked semantics, allowing multiple workers to consume the queue safely. Failed jobs are re-queued until the configured attempt limit. Re-index removes prior OpenSearch chunks for the document before indexing again.
+
+The original Phase 3A in-process endpoints remain for reference/backward compatibility; production-oriented deployments should use the durable endpoints.
+
 ## API
 
 ```json
@@ -117,7 +138,7 @@ See `docs/ARCHITECTURE.md`, `docs/EVALUATION.md`, `docs/PRODUCTION_READINESS.md`
 
 Implemented: FastAPI contracts, compiled LangGraph orchestration, BM25/hybrid OpenSearch adapter, Ollama generation, LLM query rewrite, document grading, structured citations, bounded retries, evaluation helpers, Docker services and automated tests.
 
-Still required for enterprise production: durable document registry/job queue and object storage, identity/RBAC, tenant-aware authorization, durable feedback, active Langfuse tracing, cache integration in graph execution, secret-manager integration, resilience policies, security scanning and deployment-specific SLOs.
+Still required for enterprise production: external object storage for large source files, schema migrations, identity/RBAC, tenant-aware authorization, durable feedback, active Langfuse tracing, cache integration in graph execution, secret-manager integration, stronger worker leases/dead-letter handling, security scanning and deployment-specific SLOs.
 
 ## License
 
