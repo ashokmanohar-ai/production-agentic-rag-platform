@@ -267,9 +267,14 @@ async def durable_upload_document(
     file: UploadFile = File(...),
     category: str | None = Form(default=None),
     service: DurableKnowledgeService = Depends(get_durable_knowledge_service),
+    security: SecurityContext = Depends(get_security_context),
+    audit: AuditRepository = Depends(get_audit_repository),
 ) -> DurableUploadResponse:
+    require_role(security, "contributor")
     try:
-        return await service.upload(file, category)
+        result = await service.upload(file, category, security.tenant_id, security.project_id)
+        audit.record(security, "document.upload", "document", result.document_id)
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -277,16 +282,20 @@ async def durable_upload_document(
 @app.get("/api/v1/durable/documents", response_model=list[DurableDocument])
 async def durable_list_documents(
     service: DurableKnowledgeService = Depends(get_durable_knowledge_service),
+    security: SecurityContext = Depends(get_security_context),
 ) -> list[DurableDocument]:
-    return service.list()
+    require_role(security, "reader")
+    return service.list(security.tenant_id, security.project_id)
 
 
 @app.get("/api/v1/durable/documents/{document_id}", response_model=DurableDocument)
 async def durable_get_document(
     document_id: str,
     service: DurableKnowledgeService = Depends(get_durable_knowledge_service),
+    security: SecurityContext = Depends(get_security_context),
 ) -> DurableDocument:
-    record = service.get(document_id)
+    require_role(security, "reader")
+    record = service.get(document_id, security.tenant_id, security.project_id)
     if not record:
         raise HTTPException(status_code=404, detail="Document not found")
     return record
