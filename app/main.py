@@ -212,7 +212,9 @@ async def compare_evaluations(
     baseline_id: str,
     current_id: str,
     repository: EvaluationRepository = Depends(get_evaluation_repository),
+    security: SecurityContext = Depends(get_security_context),
 ) -> EvaluationComparison:
+    require_role(security, "reader")
     comparison = repository.compare(baseline_id, current_id)
     if not comparison:
         raise HTTPException(status_code=404, detail="Evaluation run not found")
@@ -370,6 +372,8 @@ async def durable_get_job(
 async def feedback(
     request: FeedbackRequest,
     settings: Settings = Depends(get_settings),
+    security: SecurityContext = Depends(get_security_context),
 ) -> dict[str, object]:
+    require_role(security, "reader")
     _observability(settings).score(request.trace_id, request.score, request.comment)
     return {"success": True, "trace_id": request.trace_id}
