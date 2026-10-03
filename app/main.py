@@ -1,10 +1,12 @@
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import HTMLResponse
 from opensearchpy import OpenSearch
 from redis.asyncio import Redis
 
 from app.cache.decorators import CachedLLMProvider, CachedRetriever
 from app.cache.redis_cache import RedisCache
 from app.config import Settings, get_settings
+from app.dashboard import dashboard_html
 from app.embeddings.ollama import OllamaEmbeddingProvider
 from app.evaluation.history_models import EvaluationComparison
 from app.evaluation.models import EvaluationRequest, EvaluationSummary
@@ -28,7 +30,7 @@ from app.retrieval.base import Retriever
 from app.retrieval.opensearch import OpenSearchRetriever
 from app.services.agentic_rag import AgenticRAGService
 
-app = FastAPI(title="Production Agentic RAG Platform", version="1.7.0")
+app = FastAPI(title="Production Agentic RAG Platform", version="1.8.0")
 document_registry = DocumentRegistry()
 
 
@@ -129,6 +131,13 @@ async def ask(
 
 def get_evaluation_repository(settings: Settings = Depends(get_settings)) -> EvaluationRepository:
     return EvaluationRepository(build_session_factory(settings.database_url))
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def quality_dashboard(
+    repository: EvaluationRepository = Depends(get_evaluation_repository),
+) -> HTMLResponse:
+    return HTMLResponse(dashboard_html(repository.list_runs(30)))
 
 
 @app.post("/api/v1/evaluations/run", response_model=EvaluationSummary)
