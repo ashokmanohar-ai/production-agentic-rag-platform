@@ -30,4 +30,11 @@ class OllamaEmbeddingProvider:
             vectors = response.json().get("embeddings", [])
         if len(vectors) != len(texts):
             raise RuntimeError("Embedding provider returned an unexpected vector count")
-        return [[float(value) for value in vector] for vector in vectors]
+        normalized = [[float(value) for value in vector] for vector in vectors]
+        for vector in normalized:
+            if len(vector) != self._dimensions:
+                raise RuntimeError(
+                    f"Embedding dimension {len(vector)} does not match configured dimension "
+                    f"{self._dimensions}"
+                )
+        return normalized
