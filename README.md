@@ -76,6 +76,20 @@ Pull the configured embedding model before ingestion:
 docker compose exec ollama ollama pull nomic-embed-text
 ```
 
+## Knowledge file upload
+
+Phase 3A adds `PDF`, `DOCX`, `TXT` and `Markdown` uploads.
+
+```text
+POST /api/v1/documents/upload
+GET  /api/v1/documents
+GET  /api/v1/documents/{document_id}
+```
+
+Uploads are validated by extension and size, hashed with SHA-256 for duplicate detection, parsed locally, then passed through the existing chunk → embed → OpenSearch pipeline. Document lifecycle is exposed as `queued`, `parsing`, `ingesting`, `indexed`, or `failed`.
+
+FastAPI background tasks are used for this reference implementation. The registry is intentionally in-process and therefore non-durable; production deployments should replace it with PostgreSQL/another durable store and a persistent job queue.
+
 ## API
 
 ```json
@@ -103,7 +117,7 @@ See `docs/ARCHITECTURE.md`, `docs/EVALUATION.md`, `docs/PRODUCTION_READINESS.md`
 
 Implemented: FastAPI contracts, compiled LangGraph orchestration, BM25/hybrid OpenSearch adapter, Ollama generation, LLM query rewrite, document grading, structured citations, bounded retries, evaluation helpers, Docker services and automated tests.
 
-Still required for enterprise production: file/PDF parsing and asynchronous ingestion jobs, identity/RBAC, tenant-aware authorization, durable feedback, active Langfuse tracing, cache integration in graph execution, secret-manager integration, resilience policies, security scanning and deployment-specific SLOs.
+Still required for enterprise production: durable document registry/job queue and object storage, identity/RBAC, tenant-aware authorization, durable feedback, active Langfuse tracing, cache integration in graph execution, secret-manager integration, resilience policies, security scanning and deployment-specific SLOs.
 
 ## License
 
