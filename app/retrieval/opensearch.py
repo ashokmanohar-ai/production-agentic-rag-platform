@@ -2,6 +2,7 @@ import asyncio
 from typing import Any, Protocol
 
 from app.agent.context import RuntimeContext
+from app.embeddings.base import EmbeddingProvider
 
 
 class SearchClient(Protocol):
@@ -12,75 +13,93 @@ class SearchClient(Protocol):
 
 
 class OpenSearchRetriever:
-    """BM25 or real OpenSearch hybrid lexical+neural retrieval."""
+    """Tenant-scoped BM25 retrieval with application-side BM25 + KNN RRF fusion."""
 
     def __init__(
         self,
         client: SearchClient,
+        embeddings: EmbeddingProvider | None = None,
         index: str = "rag-chunks",
-        neural_model_id: str | None = None,
         vector_field: str = "embedding",
-        search_pipeline: str | None = None,
+        rrf_k: int = 60,
+        candidate_multiplier: int = 4,
     ) -> None:
         self.client = client
+        self.embeddings = embeddings
         self.index = index
-        self.neural_model_id = neural_model_id
         self.vector_field = vector_field
-        self.search_pipeline = search_pipeline
+        self.rrf_k = rrf_k
+        self.candidate_multiplier = candidate_multiplier
 
-    def _filter(self, context: RuntimeContext) -> dict[str, object]:
+    def _filters(self, context: RuntimeContext) -> list[dict[str, object]]:
         filters: list[dict[str, object]] = [
-            {"term": {"tenant_id.keyword": context.tenant_id}},
-            {"term": {"project_id.keyword": context.project_id}},
+            {"term": {"tenant_id": context.tenant_id}},
+            {"term": {"project_id": context.project_id}},
         ]
         if context.categories:
-            filters.append({"terms": {"category.keyword": list(context.categories)}})
-        return {"bool": {"filter": filters}}
+            filters.append({"terms": {"category": list(context.categories)}})
+        return filters
+
+    async def _run(self, body: dict[str, object]) -> list[dict[str, object]]:
+        response = await asyncio.to_thread(
+            self.client.search, index=self.index, body=body, params=None
+        )
+        return list(response.get("hits", {}).get("hits", []))
+
+    @staticmethod
+    def _source(hit: dict[str, object], mode: str, score: float | None = None) -> dict[str, object]:
+        source = dict(hit.get("_source", {}))
+        source["score"] = float(hit.get("_score") or 0.0) if score is None else score
+        source["search_mode"] = mode
+        return source
 
     async def search(self, query: str, context: RuntimeContext) -> list[dict[str, object]]:
-        category_filter = self._filter(context)
-        params: dict[str, str] = {}
-        if context.use_hybrid:
-            if not self.neural_model_id:
-                raise RuntimeError("Hybrid search requires OPENSEARCH_NEURAL_MODEL_ID")
-            lexical: dict[str, object] = {"match": {"text": query}}
-            neural_body: dict[str, object] = {
-                "query_text": query,
-                "model_id": self.neural_model_id,
-                "k": context.top_k,
-            }
-            if category_filter:
-                neural_body["filter"] = category_filter
-                lexical = {"bool": {"must": [lexical], "filter": [category_filter]}}
-            body: dict[str, object] = {
-                "size": context.top_k,
-                "query": {
-                    "hybrid": {
-                        "queries": [
-                            lexical,
-                            {"neural": {self.vector_field: neural_body}},
-                        ]
-                    }
-                },
-            }
-            if self.search_pipeline:
-                params["search_pipeline"] = self.search_pipeline
-        else:
-            bool_query: dict[str, object] = {"must": [{"match": {"text": query}}]}
-            if category_filter:
-                bool_query["filter"] = [category_filter]
-            body = {"size": context.top_k, "query": {"bool": bool_query}}
+        filters = self._filters(context)
+        lexical_body: dict[str, object] = {
+            "size": context.top_k if not context.use_hybrid else context.top_k * self.candidate_multiplier,
+            "query": {"bool": {"must": [{"match": {"text": query}}], "filter": filters}},
+        }
+        lexical_hits = await self._run(lexical_body)
+        if not context.use_hybrid:
+            return [self._source(hit, "bm25") for hit in lexical_hits[: context.top_k]]
 
-        response = await asyncio.to_thread(
-            self.client.search,
-            index=self.index,
-            body=body,
-            params=params or None,
-        )
-        results: list[dict[str, object]] = []
-        for hit in response.get("hits", {}).get("hits", []):
-            source = dict(hit.get("_source", {}))
-            source["score"] = float(hit.get("_score") or 0.0)
-            source["search_mode"] = "hybrid" if context.use_hybrid else "bm25"
-            results.append(source)
-        return results
+        if self.embeddings is None:
+            raise RuntimeError("Hybrid search requires the configured query embedding provider")
+        vectors = await self.embeddings.embed([query])
+        if len(vectors) != 1:
+            raise RuntimeError("Embedding provider did not return one query vector")
+        vector = vectors[0]
+        if len(vector) != self.embeddings.dimensions:
+            raise RuntimeError(
+                f"Query embedding dimension {len(vector)} does not match configured "
+                f"dimension {self.embeddings.dimensions}"
+            )
+
+        candidates = context.top_k * self.candidate_multiplier
+        vector_body: dict[str, object] = {
+            "size": candidates,
+            "query": {
+                "knn": {
+                    self.vector_field: {
+                        "vector": vector,
+                        "k": candidates,
+                        "filter": {"bool": {"filter": filters}},
+                    }
+                }
+            },
+        }
+        vector_hits = await self._run(vector_body)
+
+        ranked: dict[str, tuple[dict[str, object], float]] = {}
+        for hits in (lexical_hits, vector_hits):
+            for rank, hit in enumerate(hits, start=1):
+                source = dict(hit.get("_source", {}))
+                identity = str(source.get("chunk_id") or hit.get("_id") or "")
+                if not identity:
+                    continue
+                previous = ranked.get(identity)
+                score = (previous[1] if previous else 0.0) + 1.0 / (self.rrf_k + rank)
+                ranked[identity] = (hit if previous is None else previous[0], score)
+
+        ordered = sorted(ranked.values(), key=lambda item: (-item[1], str(item[0].get("_id", ""))))
+        return [self._source(hit, "hybrid_rrf", score) for hit, score in ordered[: context.top_k]]
