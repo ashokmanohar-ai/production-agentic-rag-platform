@@ -1,6 +1,12 @@
 from app.agent.context import RuntimeContext
 
 
+def _score(value: object) -> float:
+    if isinstance(value, (int, float)):
+        return float(value)
+    return 0.0
+
+
 class InMemoryRetriever:
     """Small deterministic retriever for local development and tests."""
 
@@ -21,5 +27,5 @@ class InMemoryRetriever:
                 item["score"] = float(score)
                 item["search_mode"] = "hybrid" if context.use_hybrid else "bm25"
                 candidates.append(item)
-        candidates.sort(key=lambda item: float(item.get("score", 0)), reverse=True)
+        candidates.sort(key=lambda item: _score(item.get("score", 0)), reverse=True)
         return candidates[: context.top_k]
