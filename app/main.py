@@ -14,11 +14,13 @@ from app.knowledge.durable_service import DurableKnowledgeService
 from app.knowledge.models import DocumentRecord, UploadResponse
 from app.knowledge.registry import DocumentRegistry
 from app.knowledge.service import KnowledgeService
+from app.llm.base import LLMProvider
 from app.llm.ollama import OllamaProvider
 from app.models import AskRequest, AskResponse, FeedbackRequest
 from app.observability.langfuse import LangfuseObservability
 from app.persistence.database import build_session_factory
 from app.persistence.repository import KnowledgeRepository
+from app.retrieval.base import Retriever
 from app.retrieval.opensearch import OpenSearchRetriever
 from app.services.agentic_rag import AgenticRAGService
 
@@ -48,14 +50,14 @@ def _cache(settings: Settings) -> RedisCache | None:
 
 
 def get_service(settings: Settings = Depends(get_settings)) -> AgenticRAGService:
-    retriever = OpenSearchRetriever(
+    retriever: Retriever = OpenSearchRetriever(
         _opensearch(settings),
         index=settings.opensearch_index,
         neural_model_id=settings.opensearch_neural_model_id,
         vector_field=settings.opensearch_vector_field,
         search_pipeline=settings.opensearch_search_pipeline,
     )
-    llm = OllamaProvider(settings.ollama_url)
+    llm: LLMProvider = OllamaProvider(settings.ollama_url)
     observability = _observability(settings)
     cache = _cache(settings)
     if cache:
