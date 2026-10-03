@@ -6,6 +6,8 @@ from app.cache.decorators import CachedLLMProvider, CachedRetriever
 from app.cache.redis_cache import RedisCache
 from app.config import Settings, get_settings
 from app.embeddings.ollama import OllamaEmbeddingProvider
+from app.evaluation.models import EvaluationRequest, EvaluationSummary
+from app.evaluation.runner import EvaluationRunner
 from app.ingestion.models import IngestRequest, IngestResponse
 from app.ingestion.opensearch_index import OpenSearchChunkIndex
 from app.ingestion.service import IngestionService
@@ -24,7 +26,7 @@ from app.retrieval.base import Retriever
 from app.retrieval.opensearch import OpenSearchRetriever
 from app.services.agentic_rag import AgenticRAGService
 
-app = FastAPI(title="Production Agentic RAG Platform", version="1.5.0")
+app = FastAPI(title="Production Agentic RAG Platform", version="1.6.0")
 document_registry = DocumentRegistry()
 
 
@@ -121,6 +123,14 @@ async def ask(
     request: AskRequest, service: AgenticRAGService = Depends(get_service)
 ) -> AskResponse:
     return await service.ask(request)
+
+
+@app.post("/api/v1/evaluations/run", response_model=EvaluationSummary)
+async def run_evaluation(
+    request: EvaluationRequest,
+    service: AgenticRAGService = Depends(get_service),
+) -> EvaluationSummary:
+    return await EvaluationRunner(service).run(request)
 
 
 @app.post("/api/v1/ingest", response_model=IngestResponse)
