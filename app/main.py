@@ -1,4 +1,4 @@
-from fastapi import Depends, FastAPI
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, UploadFile
 from opensearchpy import OpenSearch
 
 from app.config import Settings, get_settings
@@ -6,12 +6,16 @@ from app.embeddings.ollama import OllamaEmbeddingProvider
 from app.ingestion.models import IngestRequest, IngestResponse
 from app.ingestion.opensearch_index import OpenSearchChunkIndex
 from app.ingestion.service import IngestionService
+from app.knowledge.models import DocumentRecord, UploadResponse
+from app.knowledge.registry import DocumentRegistry
+from app.knowledge.service import KnowledgeService
 from app.llm.ollama import OllamaProvider
 from app.models import AskRequest, AskResponse, FeedbackRequest
 from app.retrieval.opensearch import OpenSearchRetriever
 from app.services.agentic_rag import AgenticRAGService
 
-app = FastAPI(title="Production Agentic RAG Platform", version="1.2.0")
+app = FastAPI(title="Production Agentic RAG Platform", version="1.3.0")
+document_registry = DocumentRegistry()
 
 
 def _opensearch(settings: Settings) -> OpenSearch:
@@ -54,6 +58,13 @@ def get_ingestion_service(
     )
 
 
+def get_knowledge_service(
+    ingestion: IngestionService = Depends(get_ingestion_service),
+    settings: Settings = Depends(get_settings),
+) -> KnowledgeService:
+    return KnowledgeService(document_registry, ingestion, settings.max_upload_bytes)
+
+
 @app.get("/api/v1/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -72,6 +83,37 @@ async def ingest(
     service: IngestionService = Depends(get_ingestion_service),
 ) -> IngestResponse:
     return await service.ingest(request.documents)
+
+
+@app.post("/api/v1/documents/upload", response_model=UploadResponse)
+async def upload_document(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    category: str | None = Form(default=None),
+    service: KnowledgeService = Depends(get_knowledge_service),
+) -> UploadResponse:
+    try:
+        return await service.queue_upload(file, background_tasks, category)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/v1/documents", response_model=list[DocumentRecord])
+async def list_documents(
+    service: KnowledgeService = Depends(get_knowledge_service),
+) -> list[DocumentRecord]:
+    return service.list()
+
+
+@app.get("/api/v1/documents/{document_id}", response_model=DocumentRecord)
+async def get_document(
+    document_id: str,
+    service: KnowledgeService = Depends(get_knowledge_service),
+) -> DocumentRecord:
+    record = service.get(document_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return record
 
 
 @app.post("/api/v1/feedback")
