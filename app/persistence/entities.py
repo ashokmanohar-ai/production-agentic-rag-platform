@@ -99,3 +99,18 @@ class AuditEventEntity(Base):
     resource_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     outcome: Mapped[str] = mapped_column(String(30), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
+
+
+class MembershipEntity(Base):
+    __tablename__ = "security_memberships"
+    __table_args__ = (
+        UniqueConstraint("subject", "tenant_id", "project_id", name="uq_subject_tenant_project"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    subject: Mapped[str] = mapped_column(String(200), index=True)
+    tenant_id: Mapped[str] = mapped_column(String(100), index=True)
+    project_id: Mapped[str] = mapped_column(String(100), index=True)
+    role: Mapped[str] = mapped_column(String(30))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
