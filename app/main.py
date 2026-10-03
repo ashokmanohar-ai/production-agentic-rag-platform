@@ -6,7 +6,9 @@ from app.cache.decorators import CachedLLMProvider, CachedRetriever
 from app.cache.redis_cache import RedisCache
 from app.config import Settings, get_settings
 from app.embeddings.ollama import OllamaEmbeddingProvider
+from app.evaluation.history_models import EvaluationComparison
 from app.evaluation.models import EvaluationRequest, EvaluationSummary
+from app.evaluation.repository import EvaluationRepository
 from app.evaluation.runner import EvaluationRunner
 from app.ingestion.models import IngestRequest, IngestResponse
 from app.ingestion.opensearch_index import OpenSearchChunkIndex
@@ -26,7 +28,7 @@ from app.retrieval.base import Retriever
 from app.retrieval.opensearch import OpenSearchRetriever
 from app.services.agentic_rag import AgenticRAGService
 
-app = FastAPI(title="Production Agentic RAG Platform", version="1.6.0")
+app = FastAPI(title="Production Agentic RAG Platform", version="1.7.0")
 document_registry = DocumentRegistry()
 
 
@@ -125,12 +127,67 @@ async def ask(
     return await service.ask(request)
 
 
+def get_evaluation_repository(settings: Settings = Depends(get_settings)) -> EvaluationRepository:
+    return EvaluationRepository(build_session_factory(settings.database_url))
+
+
 @app.post("/api/v1/evaluations/run", response_model=EvaluationSummary)
 async def run_evaluation(
     request: EvaluationRequest,
     service: AgenticRAGService = Depends(get_service),
+    repository: EvaluationRepository = Depends(get_evaluation_repository),
 ) -> EvaluationSummary:
-    return await EvaluationRunner(service).run(request)
+    summary = await EvaluationRunner(service).run(request)
+    repository.save(summary)
+    return summary
+
+
+@app.get("/api/v1/evaluations/history")
+async def evaluation_history(
+    limit: int = 50,
+    repository: EvaluationRepository = Depends(get_evaluation_repository),
+) -> list[dict[str, object]]:
+    safe_limit = min(max(limit, 1), 200)
+    return [
+        {
+            "run_id": item.id,
+            "dataset_name": item.dataset_name,
+            "dataset_version": item.dataset_version,
+            "pass_rate": item.pass_rate,
+            "mean_recall_at_k": item.mean_recall_at_k,
+            "mean_ndcg": item.mean_ndcg,
+            "mean_answer_relevance": item.mean_answer_relevance,
+            "mean_citation_correctness": item.mean_citation_correctness,
+            "mean_safety": item.mean_safety,
+            "mean_latency_ms": item.mean_latency_ms,
+            "regression_gate_passed": item.regression_gate_passed,
+            "created_at": item.created_at.isoformat(),
+        }
+        for item in repository.list_runs(safe_limit)
+    ]
+
+
+@app.get("/api/v1/evaluations/{run_id}", response_model=EvaluationSummary)
+async def evaluation_detail(
+    run_id: str,
+    repository: EvaluationRepository = Depends(get_evaluation_repository),
+) -> EvaluationSummary:
+    summary = repository.summary(run_id)
+    if not summary:
+        raise HTTPException(status_code=404, detail="Evaluation run not found")
+    return summary
+
+
+@app.get("/api/v1/evaluations/compare/{baseline_id}/{current_id}", response_model=EvaluationComparison)
+async def compare_evaluations(
+    baseline_id: str,
+    current_id: str,
+    repository: EvaluationRepository = Depends(get_evaluation_repository),
+) -> EvaluationComparison:
+    comparison = repository.compare(baseline_id, current_id)
+    if not comparison:
+        raise HTTPException(status_code=404, detail="Evaluation run not found")
+    return comparison
 
 
 @app.post("/api/v1/ingest", response_model=IngestResponse)
