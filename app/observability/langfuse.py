@@ -1,8 +1,14 @@
 import os
 from contextlib import AbstractContextManager, nullcontext
-from typing import Any
+from typing import Any, Literal, cast
 
 from langfuse import get_client
+
+
+ObservationType = Literal[
+    "span", "agent", "tool", "chain", "retriever", "evaluator",
+    "guardrail", "generation", "embedding"
+]
 
 
 class LangfuseObservability:
@@ -39,20 +45,21 @@ class LangfuseObservability:
     def observation(
         self,
         name: str,
-        observation_type: str,
+        observation_type: ObservationType,
         input_data: object | None = None,
         model: str | None = None,
         metadata: dict[str, object] | None = None,
     ) -> AbstractContextManager[Any]:
         if not self.client:
             return nullcontext()
-        return self.client.start_as_current_observation(
+        manager = self.client.start_as_current_observation(
             as_type=observation_type,
             name=name,
             input=input_data,
             model=model,
             metadata=metadata,
         )
+        return cast(AbstractContextManager[Any], manager)
 
     def score(self, trace_id: str, value: float, comment: str | None) -> None:
         if not self.client:
