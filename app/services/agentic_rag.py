@@ -1,5 +1,7 @@
 from uuid import uuid4
 
+from app.observability.langfuse import LangfuseObservability
+
 from app.agent.context import RuntimeContext
 from app.agent.graph import AgenticRAGGraph
 from app.agent.state import AgentState
@@ -15,13 +17,15 @@ class AgenticRAGService:
         llm: LLMProvider,
         max_attempts: int = 3,
         guardrail_threshold: int = 70,
+        observability: LangfuseObservability | None = None,
     ) -> None:
         self.max_attempts = max_attempts
         self.guardrail_threshold = guardrail_threshold
         self.graph = AgenticRAGGraph(retriever, llm, max_attempts, guardrail_threshold)
+        self.observability = observability or LangfuseObservability(False)
 
     async def ask(self, request: AskRequest) -> AskResponse:
-        trace_id = str(uuid4())
+        trace_id = uuid4().hex
         context = RuntimeContext(
             top_k=request.top_k,
             use_hybrid=request.use_hybrid,
@@ -38,7 +42,17 @@ class AgenticRAGService:
             "trace_id": trace_id,
             "runtime_context": context,
         }
-        state = await self.graph.compiled.ainvoke(initial)
+        with self.observability.trace(
+            trace_id,
+            request.query,
+            {"model": request.model, "search_mode": "hybrid" if request.use_hybrid else "bm25"},
+        ) as span:
+            state = await self.graph.compiled.ainvoke(initial)
+            if span:
+                span.update(
+                    output={"answer": state.get("answer", "")},
+                    metadata={"retrieval_attempts": state.get("retrieval_attempts", 0)},
+                )
         allowed = bool(state.get("allowed", False))
         answer = str(state.get("answer", "")).strip()
         if not allowed:
