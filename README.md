@@ -119,6 +119,14 @@ When `LANGFUSE_ENABLED=true`, requests create an Agentic RAG trace and nested re
 
 Caching is controlled by `CACHE_ENABLED` and `CACHE_TTL_SECONDS`. Redis failures are fail-open: the underlying retriever/model remains available.
 
+## AI Quality Evaluation Engine
+
+Phase 6 adds a versioned evaluation contract and regression gate at `POST /api/v1/evaluations/run`. A dataset contains named/versioned test cases with queries, expected relevant document IDs, expected answer terms and normal RAG runtime parameters.
+
+The engine executes the real Agentic RAG service and reports per-case plus aggregate **Recall@K, Precision@K, MRR, nDCG, answer-term relevance, citation correctness, safety, retrieval attempts and latency**. Every result includes the Langfuse-compatible RAG `trace_id` for failure investigation.
+
+Thresholds are configurable per run. `regression_gate_passed` is true only when every case satisfies all configured quality thresholds. The deterministic metrics are intentionally inspectable; semantic LLM-as-judge evaluation is a future extension rather than being presented as implemented.
+
 ## API
 
 ```json
@@ -144,7 +152,7 @@ See `docs/ARCHITECTURE.md`, `docs/EVALUATION.md`, `docs/PRODUCTION_READINESS.md`
 
 ## Status
 
-Implemented: FastAPI contracts, compiled LangGraph orchestration, BM25/hybrid OpenSearch adapter, Ollama generation, LLM query rewrite, document grading, structured citations, bounded retries, evaluation helpers, Docker services and automated tests.
+Implemented: FastAPI contracts, compiled LangGraph orchestration, BM25/hybrid OpenSearch adapter, Ollama generation, LLM query rewrite, document grading, structured citations, bounded retries, versioned AI Quality evaluation/regression gates, Redis caching, Langfuse observability, Docker services and automated tests.
 
 Still required for enterprise production: external object storage for large source files, schema migrations, identity/RBAC, tenant-aware authorization, durable local feedback records, cache hit/miss metrics endpoint, secret-manager integration, stronger worker leases/dead-letter handling, security scanning and deployment-specific SLOs.
 
