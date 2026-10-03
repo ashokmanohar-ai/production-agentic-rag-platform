@@ -1,3 +1,4 @@
+import os
 from contextlib import AbstractContextManager, nullcontext
 from typing import Any
 
@@ -5,8 +6,21 @@ from langfuse import get_client
 
 
 class LangfuseObservability:
-    def __init__(self, enabled: bool) -> None:
+    def __init__(
+        self,
+        enabled: bool,
+        host: str | None = None,
+        public_key: str | None = None,
+        secret_key: str | None = None,
+    ) -> None:
         self.enabled = enabled
+        if enabled:
+            if host:
+                os.environ["LANGFUSE_BASE_URL"] = host
+            if public_key:
+                os.environ["LANGFUSE_PUBLIC_KEY"] = public_key
+            if secret_key:
+                os.environ["LANGFUSE_SECRET_KEY"] = secret_key
         self.client = get_client() if enabled else None
 
     def trace(
