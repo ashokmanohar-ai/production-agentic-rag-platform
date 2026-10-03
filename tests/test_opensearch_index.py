@@ -13,7 +13,7 @@ class Indices:
         return self._exists
 
     def get_mapping(self, *, index: str):
-        return {index: {"mappings": {"properties": {"embedding": {"type": "knn_vector", "dimension": self.dimension}}}}}
+        return {index: {"mappings": {"properties": {"embedding": {"type": "knn_vector", "dimension": self.dimension}, "tenant_id": {"type": "keyword"}, "project_id": {"type": "keyword"}}}}}
 
     def create(self, *, index: str, body):
         self.created = body
@@ -37,3 +37,6 @@ async def test_new_index_uses_configured_dimension() -> None:
     await OpenSearchChunkIndex(client, "idx", "embedding", 768).ensure_index()
     vector = client.indices.created["mappings"]["properties"]["embedding"]
     assert vector["dimension"] == 768
+    properties = client.indices.created["mappings"]["properties"]
+    assert properties["tenant_id"]["type"] == "keyword"
+    assert properties["project_id"]["type"] == "keyword"
