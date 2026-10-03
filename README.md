@@ -127,6 +127,18 @@ The engine executes the real Agentic RAG service and reports per-case plus aggre
 
 Thresholds are configurable per run. `regression_gate_passed` is true only when every case satisfies all configured quality thresholds. The deterministic metrics are intentionally inspectable; semantic LLM-as-judge evaluation is a future extension rather than being presented as implemented.
 
+## Evaluation history and quality trends
+
+Phase 7 persists evaluation runs and individual case results in the platform database. This preserves Langfuse trace IDs alongside quality metrics for failure drill-down and provides APIs suitable for a quality dashboard:
+
+```text
+GET /api/v1/evaluations/history
+GET /api/v1/evaluations/{run_id}
+GET /api/v1/evaluations/compare/{baseline_id}/{current_id}
+```
+
+History exposes quality and latency trends. Run detail returns every case result and trace ID. Comparison calculates baseline-to-current deltas for pass rate, retrieval quality, ranking quality, answer relevance, citation correctness, safety and latency, and explicitly flags a pass-rate quality decrease.
+
 ## API
 
 ```json
