@@ -50,3 +50,16 @@ def test_documents_are_scoped_by_tenant_and_project() -> None:
     assert repo.get_document(first.id, "tenant-b", "project-b") is None
     scoped = repo.list_documents("tenant-a", "project-a")
     assert [item.id for item in scoped] == [first.id]
+
+
+def test_versions_and_jobs_are_tenant_scoped() -> None:
+    repo = repository()
+    document = repo.create_document(
+        "logical-scope", "scope.txt", "text/plain", "scope-hash", 3, None, b"abc",
+        tenant_id="tenant-a", project_id="project-a",
+    )
+    job = repo.create_job(document.id)
+    assert len(repo.versions("logical-scope", "tenant-a", "project-a")) == 1
+    assert repo.versions("logical-scope", "tenant-b", "project-b") == []
+    assert repo.get_job(job.id, "tenant-a", "project-a") is not None
+    assert repo.get_job(job.id, "tenant-b", "project-b") is None
