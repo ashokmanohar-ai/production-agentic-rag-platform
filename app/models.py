@@ -8,6 +8,8 @@ class AskRequest(BaseModel):
     use_hybrid: bool = True
     model: str = Field(default="llama3.2:3b", min_length=1, max_length=100)
     categories: list[str] | None = None
+    tenant_id: str = Field(default="default", min_length=1, max_length=100)
+    project_id: str = Field(default="default", min_length=1, max_length=100)
 
 
 class SourceItem(BaseModel):
