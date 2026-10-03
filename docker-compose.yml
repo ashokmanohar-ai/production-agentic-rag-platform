@@ -8,6 +8,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      ollama:
+        condition: service_started
     restart: unless-stopped
 
   redis:
@@ -33,5 +35,13 @@ services:
       timeout: 5s
       retries: 20
 
-# SECURITY: OpenSearch security is disabled only for local development.
-# Production deployments must enable TLS/authentication and network isolation.
+  ollama:
+    image: ollama/ollama:latest
+    ports: ["11434:11434"]
+    volumes: ["ollama-data:/root/.ollama"]
+
+volumes:
+  ollama-data:
+
+# SECURITY: local development configuration. Enable TLS/authentication,
+# private networking and managed secrets before production deployment.
