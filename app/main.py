@@ -73,7 +73,9 @@ def get_service(settings: Settings = Depends(get_settings)) -> AgenticRAGService
     observability = _observability(settings)
     cache = _cache(settings)
     if cache:
-        retriever = CachedRetriever(retriever, cache, observability)
+        retriever = CachedRetriever(
+            retriever, cache, observability, settings.retrieval_cache_version
+        )
         llm = CachedLLMProvider(llm, cache, observability)
     return AgenticRAGService(
         retriever,
