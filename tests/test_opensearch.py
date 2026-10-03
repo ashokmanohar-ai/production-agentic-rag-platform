@@ -1,4 +1,5 @@
 import pytest
+
 from app.agent.context import RuntimeContext
 from app.retrieval.opensearch import OpenSearchRetriever
 
@@ -8,7 +9,7 @@ class FakeOpenSearch:
         self.body = None
         self.params = None
 
-    async def search(self, index: str, body: dict, params=None) -> dict:
+    def search(self, *, index: str, body: dict, params=None) -> dict:
         self.body = body
         self.params = params
         return {"hits": {"hits": []}}
