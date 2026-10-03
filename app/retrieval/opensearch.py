@@ -3,28 +3,62 @@ from app.agent.context import RuntimeContext
 
 
 class OpenSearchRetriever:
-    """OpenSearch adapter with request-level search mode and category filtering."""
+    """BM25 or real OpenSearch hybrid lexical+neural retrieval."""
 
-    def __init__(self, client: AsyncOpenSearch, index: str = "rag-chunks") -> None:
+    def __init__(
+        self,
+        client: AsyncOpenSearch,
+        index: str = "rag-chunks",
+        neural_model_id: str | None = None,
+        vector_field: str = "embedding",
+        search_pipeline: str | None = None,
+    ) -> None:
         self.client = client
         self.index = index
+        self.neural_model_id = neural_model_id
+        self.vector_field = vector_field
+        self.search_pipeline = search_pipeline
+
+    def _filter(self, context: RuntimeContext) -> dict[str, object] | None:
+        if not context.categories:
+            return None
+        return {"terms": {"category.keyword": list(context.categories)}}
 
     async def search(self, query: str, context: RuntimeContext) -> list[dict[str, object]]:
-        filters: list[dict[str, object]] = []
-        if context.categories:
-            filters.append({"terms": {"category.keyword": list(context.categories)}})
-        # Hybrid deployments can replace this lexical clause with a search pipeline
-        # combining BM25 and a vector/neural query. The runtime flag remains explicit.
-        body: dict[str, object] = {
-            "size": context.top_k,
-            "query": {
-                "bool": {
-                    "must": [{"match": {"text": query}}],
-                    "filter": filters,
-                }
-            },
-        }
-        response = await self.client.search(index=self.index, body=body)
+        category_filter = self._filter(context)
+        params: dict[str, str] = {}
+        if context.use_hybrid:
+            if not self.neural_model_id:
+                raise RuntimeError("Hybrid search requires OPENSEARCH_NEURAL_MODEL_ID")
+            lexical: dict[str, object] = {"match": {"text": query}}
+            neural_body: dict[str, object] = {
+                "query_text": query,
+                "model_id": self.neural_model_id,
+                "k": context.top_k,
+            }
+            if category_filter:
+                neural_body["filter"] = category_filter
+                lexical = {"bool": {"must": [lexical], "filter": [category_filter]}}
+            body: dict[str, object] = {
+                "size": context.top_k,
+                "query": {
+                    "hybrid": {
+                        "queries": [
+                            lexical,
+                            {"neural": {self.vector_field: neural_body}},
+                        ]
+                    }
+                },
+            }
+            if self.search_pipeline:
+                params["search_pipeline"] = self.search_pipeline
+        else:
+            bool_query: dict[str, object] = {"must": [{"match": {"text": query}}]}
+            if category_filter:
+                bool_query["filter"] = [category_filter]
+            body = {"size": context.top_k, "query": {"bool": bool_query}}
+
+        response = await self.client.search(index=self.index, body=body, params=params or None)
         results: list[dict[str, object]] = []
         for hit in response.get("hits", {}).get("hits", []):
             source = dict(hit.get("_source", {}))
