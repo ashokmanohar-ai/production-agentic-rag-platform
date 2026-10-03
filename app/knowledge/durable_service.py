@@ -131,22 +131,22 @@ class DurableKnowledgeService:
             self.repository.finish_job(job.id, False, str(exc))
         return job_view(self.repository.get_job(job.id) or job)
 
-    def retry(self, document_id: str) -> JobRecord:
-        document = self.repository.get_document(document_id)
+    def retry(self, document_id: str, tenant_id: str | None = None, project_id: str | None = None) -> JobRecord:
+        document = self.repository.get_document(document_id, tenant_id, project_id)
         if not document:
             raise KeyError(document_id)
         self.repository.update_document(document_id, "queued", error=None)
         return job_view(self.repository.create_job(document_id, "retry"))
 
-    def reindex(self, document_id: str) -> JobRecord:
-        document = self.repository.get_document(document_id)
+    def reindex(self, document_id: str, tenant_id: str | None = None, project_id: str | None = None) -> JobRecord:
+        document = self.repository.get_document(document_id, tenant_id, project_id)
         if not document:
             raise KeyError(document_id)
         self.repository.update_document(document_id, "queued", error=None)
         return job_view(self.repository.create_job(document_id, "reindex"))
 
-    async def delete(self, document_id: str) -> bool:
-        document = self.repository.get_document(document_id)
+    async def delete(self, document_id: str, tenant_id: str | None = None, project_id: str | None = None) -> bool:
+        document = self.repository.get_document(document_id, tenant_id, project_id)
         if not document:
             return False
         await self.index.delete_document(document_id)
