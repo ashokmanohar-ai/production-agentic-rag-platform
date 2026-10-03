@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     worker_poll_seconds: float = 2.0
     worker_busy_poll_seconds: float = 0.2
     worker_job_lease_seconds: int = 300
+    runtime_health_timeout_seconds: float = 5.0
     database_url: str = "postgresql+psycopg://rag:rag@localhost:5432/rag"
     langfuse_enabled: bool = False
     langfuse_host: str = "http://localhost:3000"
