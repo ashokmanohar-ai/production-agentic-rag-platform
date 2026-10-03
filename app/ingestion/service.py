@@ -41,6 +41,8 @@ class IngestionService:
                         "category": document.category,
                         "url": document.url,
                         "authors": document.authors,
+                        "tenant_id": document.tenant_id,
+                        "project_id": document.project_id,
                         "chunk_index": chunk.chunk_index,
                         self.index.vector_field: vector,
                     }
