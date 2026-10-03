@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     opensearch_vector_field: str = "embedding"
     opensearch_search_pipeline: str | None = None
     redis_url: str = "redis://localhost:6379/0"
+    cache_enabled: bool = True
+    cache_ttl_seconds: int = 300
     ollama_url: str = "http://localhost:11434"
     embedding_model: str = "nomic-embed-text"
     embedding_dimensions: int = 768
@@ -27,6 +29,8 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://rag:rag@localhost:5432/rag"
     langfuse_enabled: bool = False
     langfuse_host: str = "http://localhost:3000"
+    langfuse_public_key: str | None = None
+    langfuse_secret_key: str | None = None
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
