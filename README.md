@@ -139,6 +139,18 @@ GET /api/v1/evaluations/compare/{baseline_id}/{current_id}
 
 History exposes quality and latency trends. Run detail returns every case result and trace ID. Comparison calculates baseline-to-current deltas for pass rate, retrieval quality, ranking quality, answer relevance, citation correctness, safety and latency, and explicitly flags a pass-rate quality decrease.
 
+## Visual AI Quality Dashboard
+
+Phase 8 adds a native dashboard at `/dashboard`. It uses the persisted evaluation history and provides:
+
+- release-gate status and latest quality KPIs;
+- pass-rate, retrieval and citation trend visualization;
+- evaluation history across dataset versions;
+- clickable run drill-down;
+- failed-case details with trace IDs for observability investigation.
+
+The dashboard is deliberately served by the existing FastAPI application so the reference deployment does not require a separate frontend service. Chart.js is loaded from a public CDN; production environments with restricted egress should self-host the static asset.
+
 ## API
 
 ```json
