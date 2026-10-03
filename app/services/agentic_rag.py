@@ -33,6 +33,8 @@ class AgenticRAGService:
             categories=tuple(request.categories or ()),
             max_retrieval_attempts=self.max_attempts,
             guardrail_threshold=self.guardrail_threshold,
+            tenant_id=request.tenant_id,
+            project_id=request.project_id,
         )
         initial: AgentState = {
             "original_query": request.query,
