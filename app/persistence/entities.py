@@ -23,6 +23,8 @@ class DocumentEntity(Base):
     sha256: Mapped[str] = mapped_column(String(64), index=True)
     size_bytes: Mapped[int] = mapped_column(Integer)
     category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    tenant_id: Mapped[str] = mapped_column(String(100), index=True, default="default")
+    project_id: Mapped[str] = mapped_column(String(100), index=True, default="default")
     status: Mapped[str] = mapped_column(String(30), index=True)
     chunks_indexed: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -83,3 +85,17 @@ class EvaluationCaseEntity(Base):
     retrieval_attempts: Mapped[int] = mapped_column(Integer)
     latency_ms: Mapped[float] = mapped_column(Float)
     passed: Mapped[bool] = mapped_column(Boolean)
+
+
+class AuditEventEntity(Base):
+    __tablename__ = "audit_events"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    subject: Mapped[str] = mapped_column(String(200), index=True)
+    tenant_id: Mapped[str] = mapped_column(String(100), index=True)
+    project_id: Mapped[str] = mapped_column(String(100), index=True)
+    action: Mapped[str] = mapped_column(String(100), index=True)
+    resource_type: Mapped[str] = mapped_column(String(100))
+    resource_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    outcome: Mapped[str] = mapped_column(String(30), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
