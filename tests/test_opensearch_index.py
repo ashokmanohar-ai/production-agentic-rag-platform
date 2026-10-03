@@ -40,3 +40,6 @@ async def test_new_index_uses_configured_dimension() -> None:
     properties = client.indices.created["mappings"]["properties"]
     assert properties["tenant_id"]["type"] == "keyword"
     assert properties["project_id"]["type"] == "keyword"
+    properties = client.indices.created["mappings"]["properties"]
+    assert properties["tenant_id"]["type"] == "keyword"
+    assert properties["project_id"]["type"] == "keyword"
