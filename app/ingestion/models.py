@@ -8,6 +8,8 @@ class IngestDocument(BaseModel):
     category: str | None = Field(default=None, max_length=100)
     url: str | None = None
     authors: list[str] = Field(default_factory=list)
+    tenant_id: str = Field(default="default", min_length=1, max_length=100)
+    project_id: str = Field(default="default", min_length=1, max_length=100)
 
 
 class IngestRequest(BaseModel):
