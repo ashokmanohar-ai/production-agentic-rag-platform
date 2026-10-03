@@ -1,7 +1,10 @@
-from sqlalchemy import create_engine
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import create_engine, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.persistence.database import Base
+from app.persistence.entities import IngestionJobEntity
 from app.persistence.repository import KnowledgeRepository
 
 
@@ -63,3 +66,34 @@ def test_versions_and_jobs_are_tenant_scoped() -> None:
     assert repo.versions("logical-scope", "tenant-b", "project-b") == []
     assert repo.get_job(job.id, "tenant-a", "project-a") is not None
     assert repo.get_job(job.id, "tenant-b", "project-b") is None
+
+
+def test_stale_processing_job_is_recovered() -> None:
+    repo = repository()
+    document = repo.create_document(
+        "logical-stale", "stale.txt", "text/plain", "stale-hash", 3, None, b"abc"
+    )
+    job = repo.create_job(document.id)
+    repo.claim_job()
+    with repo.sessions() as session:
+        session.execute(
+            update(IngestionJobEntity)
+            .where(IngestionJobEntity.id == job.id)
+            .values(updated_at=datetime.now(UTC) - timedelta(minutes=10))
+        )
+        session.commit()
+    assert repo.recover_stale_jobs(60) == 1
+    recovered = repo.get_job(job.id)
+    assert recovered.status == "queued"
+    assert "lease expired" in recovered.error.lower()
+
+
+def test_active_job_detects_queued_or_processing_work() -> None:
+    repo = repository()
+    document = repo.create_document(
+        "logical-active", "active.txt", "text/plain", "active-hash", 3, None, b"abc"
+    )
+    job = repo.create_job(document.id)
+    assert repo.active_job(document.id).id == job.id
+    repo.claim_job()
+    assert repo.active_job(document.id).id == job.id
