@@ -31,7 +31,21 @@ class EvaluationRepository:
             session.add(run)
             session.flush()
             for item in summary.results:
-                session.add(EvaluationCaseEntity(run_id=run.id, **item.model_dump()))
+                session.add(EvaluationCaseEntity(
+                    run_id=run.id,
+                    case_id=item.case_id,
+                    trace_id=item.trace_id,
+                    recall_at_k=item.recall_at_k,
+                    precision_at_k=item.precision_at_k,
+                    mrr=item.mrr,
+                    ndcg=item.ndcg,
+                    answer_relevance=item.answer_relevance,
+                    citation_correctness=item.citation_correctness,
+                    safety=item.safety,
+                    retrieval_attempts=item.retrieval_attempts,
+                    latency_ms=item.latency_ms,
+                    passed=item.passed,
+                ))
             session.commit()
             return run.id
 
