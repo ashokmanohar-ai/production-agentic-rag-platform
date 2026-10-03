@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     guardrail_threshold: int = 70
     guardrail_fail_closed: bool = True
     opensearch_url: str = "http://localhost:9200"
+    opensearch_index: str = "rag-chunks"
+    opensearch_neural_model_id: str | None = None
+    opensearch_vector_field: str = "embedding"
+    opensearch_search_pipeline: str | None = None
     redis_url: str = "redis://localhost:6379/0"
     ollama_url: str = "http://localhost:11434"
     langfuse_enabled: bool = False
