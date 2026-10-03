@@ -1,4 +1,5 @@
 from typing import TypedDict
+from app.agent.context import RuntimeContext
 from app.models import ReasoningStep, SourceItem
 
 
@@ -13,3 +14,4 @@ class AgentState(TypedDict, total=False):
     sources: list[SourceItem]
     reasoning_steps: list[ReasoningStep]
     trace_id: str
+    runtime_context: RuntimeContext
