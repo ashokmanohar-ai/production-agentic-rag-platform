@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from app.agent.context import RuntimeContext
 from app.embeddings.base import EmbeddingProvider
@@ -48,8 +48,9 @@ class OpenSearchRetriever:
 
     @staticmethod
     def _source(hit: dict[str, object], mode: str, score: float | None = None) -> dict[str, object]:
-        source = dict(hit.get("_source", {}))
-        source["score"] = float(hit.get("_score") or 0.0) if score is None else score
+        source = dict(cast(dict[str, object], hit.get("_source", {})))
+        raw_score = hit.get("_score")
+        source["score"] = float(cast(float | int, raw_score or 0.0)) if score is None else score
         source["search_mode"] = mode
         return source
 
@@ -93,7 +94,7 @@ class OpenSearchRetriever:
         ranked: dict[str, tuple[dict[str, object], float]] = {}
         for hits in (lexical_hits, vector_hits):
             for rank, hit in enumerate(hits, start=1):
-                source = dict(hit.get("_source", {}))
+                source = dict(cast(dict[str, object], hit.get("_source", {})))
                 identity = str(source.get("chunk_id") or hit.get("_id") or "")
                 if not identity:
                     continue
