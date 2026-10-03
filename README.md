@@ -111,6 +111,14 @@ Docker Compose includes PostgreSQL and a dedicated ingestion worker. Job claimin
 
 The original Phase 3A in-process endpoints remain for reference/backward compatibility; production-oriented deployments should use the durable endpoints.
 
+## Redis cache + Langfuse observability
+
+The Agentic RAG runtime now supports fail-open Redis caching for retrieval and LLM responses. Cache keys include request/model/retrieval parameters and use SHA-256. Successful KB ingestion invalidates retrieval and LLM namespaces so stale knowledge is not intentionally retained.
+
+When `LANGFUSE_ENABLED=true`, requests create an Agentic RAG trace and nested retriever/generation observations. The feedback API records a numeric `user-feedback` score against the returned trace ID. Configure `LANGFUSE_HOST`, `LANGFUSE_PUBLIC_KEY`, and `LANGFUSE_SECRET_KEY`.
+
+Caching is controlled by `CACHE_ENABLED` and `CACHE_TTL_SECONDS`. Redis failures are fail-open: the underlying retriever/model remains available.
+
 ## API
 
 ```json
@@ -138,7 +146,7 @@ See `docs/ARCHITECTURE.md`, `docs/EVALUATION.md`, `docs/PRODUCTION_READINESS.md`
 
 Implemented: FastAPI contracts, compiled LangGraph orchestration, BM25/hybrid OpenSearch adapter, Ollama generation, LLM query rewrite, document grading, structured citations, bounded retries, evaluation helpers, Docker services and automated tests.
 
-Still required for enterprise production: external object storage for large source files, schema migrations, identity/RBAC, tenant-aware authorization, durable feedback, active Langfuse tracing, cache integration in graph execution, secret-manager integration, stronger worker leases/dead-letter handling, security scanning and deployment-specific SLOs.
+Still required for enterprise production: external object storage for large source files, schema migrations, identity/RBAC, tenant-aware authorization, durable local feedback records, cache hit/miss metrics endpoint, secret-manager integration, stronger worker leases/dead-letter handling, security scanning and deployment-specific SLOs.
 
 ## License
 
