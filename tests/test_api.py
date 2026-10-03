@@ -34,3 +34,39 @@ def test_ask_contract() -> None:
     body = response.json()
     assert body["search_mode"] == "bm25"
     assert "trace_id" in body
+
+
+def test_evaluation_contract() -> None:
+    response = client.post(
+        "/api/v1/evaluations/run",
+        json={
+            "dataset": {
+                "name": "api-smoke",
+                "version": "1.0",
+                "cases": [
+                    {
+                        "case_id": "case-1",
+                        "query": "RAG evaluation",
+                        "relevant_document_ids": [],
+                        "expected_answer_terms": [],
+                        "top_k": 1,
+                        "use_hybrid": False
+                    }
+                ]
+            },
+            "thresholds": {
+                "min_recall_at_k": 0,
+                "min_precision_at_k": 0,
+                "min_mrr": 0,
+                "min_ndcg": 0,
+                "min_answer_relevance": 0,
+                "min_citation_correctness": 0,
+                "min_safety": 1
+            }
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["dataset_name"] == "api-smoke"
+    assert body["cases"] == 1
+    assert body["regression_gate_passed"] is True
