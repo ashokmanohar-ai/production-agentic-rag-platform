@@ -1,5 +1,6 @@
 from fastapi import Depends, FastAPI
-from opensearchpy import AsyncOpenSearch
+from opensearchpy import OpenSearch
+
 from app.config import Settings, get_settings
 from app.llm.ollama import OllamaProvider
 from app.models import AskRequest, AskResponse, FeedbackRequest
@@ -10,7 +11,7 @@ app = FastAPI(title="Production Agentic RAG Platform", version="1.1.0")
 
 
 def get_service(settings: Settings = Depends(get_settings)) -> AgenticRAGService:
-    client = AsyncOpenSearch(hosts=[settings.opensearch_url])
+    client = OpenSearch(hosts=[settings.opensearch_url])
     retriever = OpenSearchRetriever(
         client,
         index=settings.opensearch_index,
@@ -19,7 +20,9 @@ def get_service(settings: Settings = Depends(get_settings)) -> AgenticRAGService
         search_pipeline=settings.opensearch_search_pipeline,
     )
     llm = OllamaProvider(settings.ollama_url)
-    return AgenticRAGService(retriever, llm, settings.max_retrieval_attempts, settings.guardrail_threshold)
+    return AgenticRAGService(
+        retriever, llm, settings.max_retrieval_attempts, settings.guardrail_threshold
+    )
 
 
 @app.get("/api/v1/health")
@@ -28,7 +31,9 @@ async def health() -> dict[str, str]:
 
 
 @app.post("/api/v1/ask", response_model=AskResponse)
-async def ask(request: AskRequest, service: AgenticRAGService = Depends(get_service)) -> AskResponse:
+async def ask(
+    request: AskRequest, service: AgenticRAGService = Depends(get_service)
+) -> AskResponse:
     return await service.ask(request)
 
 
