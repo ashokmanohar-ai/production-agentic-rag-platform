@@ -32,7 +32,7 @@ from app.retrieval.opensearch import OpenSearchRetriever
 from app.services.agentic_rag import AgenticRAGService
 from app.security import SecurityContext, get_security_context, require_role
 
-app = FastAPI(title="Production Agentic RAG Platform", version="1.11.0")
+app = FastAPI(title="Production Agentic RAG Platform", version="1.12.0")
 document_registry = DocumentRegistry()
 
 
