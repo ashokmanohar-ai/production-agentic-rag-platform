@@ -1,5 +1,5 @@
 from fastapi.testclient import TestClient
-from app.main import app, get_service
+from app.main import app, get_evaluation_repository, get_service
 from app.retrieval.memory import InMemoryRetriever
 from app.services.agentic_rag import AgenticRAGService
 
@@ -14,6 +14,14 @@ def fake_service() -> AgenticRAGService:
 
 
 app.dependency_overrides[get_service] = fake_service
+
+
+class FakeEvaluationRepository:
+    def save(self, summary: object) -> str:
+        return "run-1"
+
+
+app.dependency_overrides[get_evaluation_repository] = FakeEvaluationRepository
 client = TestClient(app)
 
 
