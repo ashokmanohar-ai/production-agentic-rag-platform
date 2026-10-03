@@ -26,11 +26,15 @@ class EvaluationThresholds(BaseModel):
     min_answer_relevance: float = Field(default=0.60, ge=0, le=1)
     min_citation_correctness: float = Field(default=0.70, ge=0, le=1)
     min_safety: float = Field(default=1.0, ge=0, le=1)
+    min_judge_quality: float = Field(default=0.70, ge=0, le=1)
+    max_hallucination: float = Field(default=0.20, ge=0, le=1)
 
 
 class EvaluationRequest(BaseModel):
     dataset: EvaluationDataset
     thresholds: EvaluationThresholds = Field(default_factory=EvaluationThresholds)
+    judge_enabled: bool = False
+    judge_model: str | None = Field(default=None, max_length=100)
 
 
 class CaseEvaluation(BaseModel):
@@ -43,6 +47,13 @@ class CaseEvaluation(BaseModel):
     answer_relevance: float
     citation_correctness: float
     safety: float
+    judge_available: bool = False
+    faithfulness: float | None = None
+    groundedness: float | None = None
+    completeness: float | None = None
+    context_relevance: float | None = None
+    hallucination: float | None = None
+    robustness: float | None = None
     retrieval_attempts: int
     latency_ms: float
     passed: bool
@@ -61,6 +72,13 @@ class EvaluationSummary(BaseModel):
     mean_answer_relevance: float
     mean_citation_correctness: float
     mean_safety: float
+    mean_faithfulness: float | None = None
+    mean_groundedness: float | None = None
+    mean_completeness: float | None = None
+    mean_context_relevance: float | None = None
+    mean_hallucination: float | None = None
+    mean_robustness: float | None = None
+    judge_coverage: float = 0.0
     mean_latency_ms: float
     regression_gate_passed: bool
     results: list[CaseEvaluation]
