@@ -1,15 +1,25 @@
 from fastapi import Depends, FastAPI
+from opensearchpy import AsyncOpenSearch
 from app.config import Settings, get_settings
+from app.llm.ollama import OllamaProvider
 from app.models import AskRequest, AskResponse, FeedbackRequest
-from app.retrieval.memory import InMemoryRetriever
+from app.retrieval.opensearch import OpenSearchRetriever
 from app.services.agentic_rag import AgenticRAGService
 
-app = FastAPI(title="Production Agentic RAG Platform", version="1.0.0")
+app = FastAPI(title="Production Agentic RAG Platform", version="1.1.0")
 
 
 def get_service(settings: Settings = Depends(get_settings)) -> AgenticRAGService:
-    retriever = InMemoryRetriever([])
-    return AgenticRAGService(retriever, settings.max_retrieval_attempts, settings.guardrail_threshold)
+    client = AsyncOpenSearch(hosts=[settings.opensearch_url])
+    retriever = OpenSearchRetriever(
+        client,
+        index=settings.opensearch_index,
+        neural_model_id=settings.opensearch_neural_model_id,
+        vector_field=settings.opensearch_vector_field,
+        search_pipeline=settings.opensearch_search_pipeline,
+    )
+    llm = OllamaProvider(settings.ollama_url)
+    return AgenticRAGService(retriever, llm, settings.max_retrieval_attempts, settings.guardrail_threshold)
 
 
 @app.get("/api/v1/health")
