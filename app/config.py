@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     ingestion_chunk_size: int = 1200
     ingestion_chunk_overlap: int = 200
     max_upload_bytes: int = 20_000_000
+    worker_poll_seconds: float = 2.0
+    worker_busy_poll_seconds: float = 0.2
+    worker_job_lease_seconds: int = 300
     database_url: str = "postgresql+psycopg://rag:rag@localhost:5432/rag"
     langfuse_enabled: bool = False
     langfuse_host: str = "http://localhost:3000"

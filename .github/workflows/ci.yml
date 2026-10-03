@@ -24,9 +24,24 @@ jobs:
         image: redis:7
         ports:
           - 6379:6379
+      opensearch:
+        image: opensearchproject/opensearch:2.19.0
+        env:
+          discovery.type: single-node
+          DISABLE_SECURITY_PLUGIN: "true"
+          OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+        ports:
+          - 9200:9200
+        options: >-
+          --health-cmd "curl -fsS http://localhost:9200/_cluster/health || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
     env:
       DATABASE_URL: postgresql+psycopg://rag:rag@localhost:5432/rag
       REDIS_URL: redis://localhost:6379/0
+      OPENSEARCH_URL: http://localhost:9200
+      RUN_OPENSEARCH_INTEGRATION: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

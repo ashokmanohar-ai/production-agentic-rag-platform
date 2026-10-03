@@ -112,8 +112,6 @@ class DurableKnowledgeService:
             if not text:
                 raise ValueError("No extractable text found in document")
             self.repository.update_document(document.id, "ingesting")
-            if job.operation == "reindex":
-                await self.index.delete_document(document.id)
             result = await self.ingestion.ingest(
                 [
                     IngestDocument(
@@ -121,20 +119,27 @@ class DurableKnowledgeService:
                         title=document.filename,
                         text=text,
                         category=document.category,
+                        tenant_id=document.tenant_id,
+                        project_id=document.project_id,
                     )
                 ]
             )
             self.repository.update_document(document.id, "indexed", result.chunks_indexed)
             self.repository.finish_job(job.id, True)
         except Exception as exc:
-            self.repository.update_document(document.id, "failed", error=str(exc))
             self.repository.finish_job(job.id, False, str(exc))
+            persisted_job = self.repository.get_job(job.id)
+            next_status = "queued" if persisted_job and persisted_job.status == "queued" else "failed"
+            self.repository.update_document(document.id, next_status, error=str(exc))
         return job_view(self.repository.get_job(job.id) or job)
 
     def retry(self, document_id: str, tenant_id: str | None = None, project_id: str | None = None) -> JobRecord:
         document = self.repository.get_document(document_id, tenant_id, project_id)
         if not document:
             raise KeyError(document_id)
+        active = self.repository.active_job(document_id)
+        if active:
+            return job_view(active)
         self.repository.update_document(document_id, "queued", error=None)
         return job_view(self.repository.create_job(document_id, "retry"))
 
@@ -142,6 +147,9 @@ class DurableKnowledgeService:
         document = self.repository.get_document(document_id, tenant_id, project_id)
         if not document:
             raise KeyError(document_id)
+        active = self.repository.active_job(document_id)
+        if active:
+            return job_view(active)
         self.repository.update_document(document_id, "queued", error=None)
         return job_view(self.repository.create_job(document_id, "reindex"))
 

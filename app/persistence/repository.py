@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -127,6 +127,40 @@ class KnowledgeRepository:
             session.commit()
             session.refresh(job)
             session.expunge(job)
+            return job
+
+    def recover_stale_jobs(self, lease_seconds: int) -> int:
+        cutoff = datetime.now(UTC) - timedelta(seconds=lease_seconds)
+        recovered = 0
+        with self.sessions() as session:
+            jobs = list(
+                session.scalars(
+                    select(IngestionJobEntity).where(
+                        IngestionJobEntity.status == "processing",
+                        IngestionJobEntity.updated_at < cutoff,
+                    )
+                )
+            )
+            for job in jobs:
+                job.status = "queued" if job.attempts < job.max_attempts else "failed"
+                job.error = "Worker lease expired; job recovered"
+                job.updated_at = datetime.now(UTC)
+                recovered += 1
+            session.commit()
+        return recovered
+
+    def active_job(self, document_id: str) -> IngestionJobEntity | None:
+        with self.sessions() as session:
+            job = session.scalar(
+                select(IngestionJobEntity)
+                .where(
+                    IngestionJobEntity.document_id == document_id,
+                    IngestionJobEntity.status.in_(("queued", "processing")),
+                )
+                .order_by(IngestionJobEntity.created_at.desc())
+            )
+            if job:
+                session.expunge(job)
             return job
 
     def finish_job(self, job_id: str, success: bool, error: str | None = None) -> None:
