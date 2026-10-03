@@ -32,7 +32,7 @@ from app.retrieval.opensearch import OpenSearchRetriever
 from app.services.agentic_rag import AgenticRAGService
 from app.security import SecurityContext, get_security_context, require_role
 
-app = FastAPI(title="Production Agentic RAG Platform", version="1.10.1")
+app = FastAPI(title="Production Agentic RAG Platform", version="1.10.3")
 document_registry = DocumentRegistry()
 
 
@@ -305,20 +305,24 @@ async def durable_get_document(
 async def durable_document_versions(
     document_id: str,
     service: DurableKnowledgeService = Depends(get_durable_knowledge_service),
+    security: SecurityContext = Depends(get_security_context),
 ) -> list[DurableDocument]:
-    record = service.get(document_id)
+    require_role(security, "reader")
+    record = service.get(document_id, security.tenant_id, security.project_id)
     if not record:
         raise HTTPException(status_code=404, detail="Document not found")
-    return service.versions(record.logical_id)
+    return service.versions(record.logical_id, security.tenant_id, security.project_id)
 
 
 @app.post("/api/v1/durable/documents/{document_id}/retry", response_model=JobRecord)
 async def durable_retry_document(
     document_id: str,
     service: DurableKnowledgeService = Depends(get_durable_knowledge_service),
+    security: SecurityContext = Depends(get_security_context),
 ) -> JobRecord:
+    require_role(security, "contributor")
     try:
-        return service.retry(document_id)
+        return service.retry(document_id, security.tenant_id, security.project_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Document not found") from exc
 
@@ -327,9 +331,11 @@ async def durable_retry_document(
 async def durable_reindex_document(
     document_id: str,
     service: DurableKnowledgeService = Depends(get_durable_knowledge_service),
+    security: SecurityContext = Depends(get_security_context),
 ) -> JobRecord:
+    require_role(security, "contributor")
     try:
-        return service.reindex(document_id)
+        return service.reindex(document_id, security.tenant_id, security.project_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Document not found") from exc
 
@@ -338,8 +344,10 @@ async def durable_reindex_document(
 async def durable_delete_document(
     document_id: str,
     service: DurableKnowledgeService = Depends(get_durable_knowledge_service),
+    security: SecurityContext = Depends(get_security_context),
 ) -> dict[str, bool]:
-    deleted = await service.delete(document_id)
+    require_role(security, "admin")
+    deleted = await service.delete(document_id, security.tenant_id, security.project_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Document not found")
     return {"deleted": True}
@@ -349,8 +357,10 @@ async def durable_delete_document(
 async def durable_get_job(
     job_id: str,
     service: DurableKnowledgeService = Depends(get_durable_knowledge_service),
+    security: SecurityContext = Depends(get_security_context),
 ) -> JobRecord:
-    job = service.job(job_id)
+    require_role(security, "reader")
+    job = service.job(job_id, security.tenant_id, security.project_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
