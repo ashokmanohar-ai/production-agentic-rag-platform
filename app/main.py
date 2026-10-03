@@ -1,6 +1,9 @@
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, UploadFile
 from opensearchpy import OpenSearch
+from redis.asyncio import Redis
 
+from app.cache.decorators import CachedLLMProvider, CachedRetriever
+from app.cache.redis_cache import RedisCache
 from app.config import Settings, get_settings
 from app.embeddings.ollama import OllamaEmbeddingProvider
 from app.ingestion.models import IngestRequest, IngestResponse
@@ -13,17 +16,35 @@ from app.knowledge.registry import DocumentRegistry
 from app.knowledge.service import KnowledgeService
 from app.llm.ollama import OllamaProvider
 from app.models import AskRequest, AskResponse, FeedbackRequest
+from app.observability.langfuse import LangfuseObservability
 from app.persistence.database import build_session_factory
 from app.persistence.repository import KnowledgeRepository
 from app.retrieval.opensearch import OpenSearchRetriever
 from app.services.agentic_rag import AgenticRAGService
 
-app = FastAPI(title="Production Agentic RAG Platform", version="1.4.0")
+app = FastAPI(title="Production Agentic RAG Platform", version="1.5.0")
 document_registry = DocumentRegistry()
 
 
 def _opensearch(settings: Settings) -> OpenSearch:
     return OpenSearch(hosts=[settings.opensearch_url])
+
+
+
+
+def _observability(settings: Settings) -> LangfuseObservability:
+    return LangfuseObservability(
+        settings.langfuse_enabled,
+        settings.langfuse_host,
+        settings.langfuse_public_key,
+        settings.langfuse_secret_key,
+    )
+
+
+def _cache(settings: Settings) -> RedisCache | None:
+    if not settings.cache_enabled:
+        return None
+    return RedisCache(Redis.from_url(settings.redis_url), settings.cache_ttl_seconds)
 
 
 def get_service(settings: Settings = Depends(get_settings)) -> AgenticRAGService:
@@ -35,8 +56,17 @@ def get_service(settings: Settings = Depends(get_settings)) -> AgenticRAGService
         search_pipeline=settings.opensearch_search_pipeline,
     )
     llm = OllamaProvider(settings.ollama_url)
+    observability = _observability(settings)
+    cache = _cache(settings)
+    if cache:
+        retriever = CachedRetriever(retriever, cache, observability)
+        llm = CachedLLMProvider(llm, cache, observability)
     return AgenticRAGService(
-        retriever, llm, settings.max_retrieval_attempts, settings.guardrail_threshold
+        retriever,
+        llm,
+        settings.max_retrieval_attempts,
+        settings.guardrail_threshold,
+        observability,
     )
 
 
@@ -59,6 +89,7 @@ def get_ingestion_service(
         embeddings,
         settings.ingestion_chunk_size,
         settings.ingestion_chunk_overlap,
+        _cache(settings),
     )
 
 
@@ -216,5 +247,9 @@ async def durable_get_job(
 
 
 @app.post("/api/v1/feedback")
-async def feedback(request: FeedbackRequest) -> dict[str, object]:
+async def feedback(
+    request: FeedbackRequest,
+    settings: Settings = Depends(get_settings),
+) -> dict[str, object]:
+    _observability(settings).score(request.trace_id, request.score, request.comment)
     return {"success": True, "trace_id": request.trace_id}
