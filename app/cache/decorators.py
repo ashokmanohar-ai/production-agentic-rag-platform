@@ -25,8 +25,9 @@ class CachedRetriever:
         }
         key = self.cache.key("retrieval", payload)
         cached = await self.cache.get_json(key)
-        if cached and isinstance(cached.get("items"), list):
-            return [dict(item) for item in cached["items"] if isinstance(item, dict)]
+        cached_items = cached.get("items") if cached else None
+        if isinstance(cached_items, list):
+            return [dict(item) for item in cached_items if isinstance(item, dict)]
         with self.observability.observation(
             "retrieve", "retriever", input_data=payload, metadata={"cache_hit": False}
         ) as span:
@@ -51,8 +52,9 @@ class CachedLLMProvider:
     async def generate(self, prompt: str, model: str) -> str:
         key = self.cache.key("llm", {"prompt": prompt, "model": model})
         cached = await self.cache.get_json(key)
-        if cached and isinstance(cached.get("text"), str):
-            return cached["text"]
+        cached_text = cached.get("text") if cached else None
+        if isinstance(cached_text, str):
+            return cached_text
         with self.observability.observation(
             "llm-generate", "generation", input_data={"prompt": prompt}, model=model,
             metadata={"cache_hit": False},
