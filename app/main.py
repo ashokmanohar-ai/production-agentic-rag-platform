@@ -32,7 +32,7 @@ from app.retrieval.opensearch import OpenSearchRetriever
 from app.services.agentic_rag import AgenticRAGService
 from app.security import SecurityContext, get_security_context, require_role
 
-app = FastAPI(title="Production Agentic RAG Platform", version="1.10.3")
+app = FastAPI(title="Production Agentic RAG Platform", version="1.11.0")
 document_registry = DocumentRegistry()
 
 
@@ -58,12 +58,16 @@ def _cache(settings: Settings) -> RedisCache | None:
 
 
 def get_service(settings: Settings = Depends(get_settings)) -> AgenticRAGService:
+    embeddings = OllamaEmbeddingProvider(
+        settings.ollama_url,
+        settings.embedding_model,
+        settings.embedding_dimensions,
+    )
     retriever: Retriever = OpenSearchRetriever(
         _opensearch(settings),
+        embeddings=embeddings,
         index=settings.opensearch_index,
-        neural_model_id=settings.opensearch_neural_model_id,
         vector_field=settings.opensearch_vector_field,
-        search_pipeline=settings.opensearch_search_pipeline,
     )
     llm: LLMProvider = OllamaProvider(settings.ollama_url)
     observability = _observability(settings)
