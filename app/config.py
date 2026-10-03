@@ -1,4 +1,5 @@
 from functools import lru_cache
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,6 +19,10 @@ class Settings(BaseSettings):
     opensearch_search_pipeline: str | None = None
     redis_url: str = "redis://localhost:6379/0"
     ollama_url: str = "http://localhost:11434"
+    embedding_model: str = "nomic-embed-text"
+    embedding_dimensions: int = 768
+    ingestion_chunk_size: int = 1200
+    ingestion_chunk_overlap: int = 200
     langfuse_enabled: bool = False
     langfuse_host: str = "http://localhost:3000"
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
