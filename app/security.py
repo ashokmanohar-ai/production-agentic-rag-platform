@@ -8,6 +8,7 @@ from fastapi import Header, HTTPException
 from jwt import PyJWKClient
 
 from app.config import Settings, get_settings
+from app.persistence.database import build_session_factory
 
 Role = Literal["reader", "contributor", "admin"]
 
@@ -76,7 +77,16 @@ def get_security_context(
         raise HTTPException(status_code=401, detail="Bearer credential required")
     if not x_tenant_id or not x_project_id:
         raise HTTPException(status_code=400, detail="Tenant and project headers are required")
-    subject = authenticate_subject(authorization.removeprefix("Bearer ").strip(), settings)
+    token = authorization.removeprefix("Bearer ").strip()
+    subject = authenticate_subject(token, settings)
+    if settings.oidc_enabled and token.count(".") == 2:
+        from app.persistence.membership import MembershipRepository
+        role = MembershipRepository(build_session_factory(settings.database_url)).role_for(
+            subject, x_tenant_id, x_project_id
+        )
+        if role is None:
+            raise HTTPException(status_code=403, detail="No active tenant/project membership")
+        return SecurityContext(subject, x_tenant_id, x_project_id, role)
     if x_role not in _ROLE_LEVEL:
         raise HTTPException(status_code=403, detail="Valid role header required")
     return SecurityContext(subject, x_tenant_id, x_project_id, cast(Role, x_role))
