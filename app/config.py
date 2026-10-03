@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     langfuse_secret_key: str | None = None
     auth_enabled: bool = False
     api_key_sha256: str | None = None
+    oidc_enabled: bool = False
+    oidc_issuer: str | None = None
+    oidc_audience: str | None = None
+    oidc_jwks_url: str | None = None
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
