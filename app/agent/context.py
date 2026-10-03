@@ -9,3 +9,5 @@ class RuntimeContext:
     categories: tuple[str, ...]
     max_retrieval_attempts: int
     guardrail_threshold: int
+    tenant_id: str = "default"
+    project_id: str = "default"
