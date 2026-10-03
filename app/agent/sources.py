@@ -1,5 +1,12 @@
 from collections.abc import Iterable
+
 from app.models import SourceItem
+
+
+def _score(value: object) -> float:
+    if isinstance(value, (int, float)):
+        return float(value)
+    return 0.0
 
 
 def extract_sources(documents: Iterable[dict[str, object]]) -> list[SourceItem]:
@@ -17,13 +24,15 @@ def extract_sources(documents: Iterable[dict[str, object]]) -> list[SourceItem]:
         seen.add(key)
         raw_authors = doc.get("authors", [])
         authors = [str(v) for v in raw_authors] if isinstance(raw_authors, list) else []
-        sources.append(SourceItem(
-            document_id=document_id,
-            chunk_id=chunk_id,
-            title=str(doc.get("title", "Untitled")),
-            url=str(doc["url"]) if doc.get("url") else None,
-            authors=authors,
-            score=float(doc.get("score", 0.0)),
-            category=str(doc["category"]) if doc.get("category") else None,
-        ))
+        sources.append(
+            SourceItem(
+                document_id=document_id,
+                chunk_id=chunk_id,
+                title=str(doc.get("title", "Untitled")),
+                url=str(doc["url"]) if doc.get("url") else None,
+                authors=authors,
+                score=_score(doc.get("score", 0.0)),
+                category=str(doc["category"]) if doc.get("category") else None,
+            )
+        )
     return sources
