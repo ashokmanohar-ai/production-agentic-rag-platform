@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.persistence.database import Base
@@ -43,3 +43,43 @@ class IngestionJobEntity(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class EvaluationRunEntity(Base):
+    __tablename__ = "evaluation_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    dataset_name: Mapped[str] = mapped_column(String(200), index=True)
+    dataset_version: Mapped[str] = mapped_column(String(50), index=True)
+    cases: Mapped[int] = mapped_column(Integer)
+    passed_cases: Mapped[int] = mapped_column(Integer)
+    pass_rate: Mapped[float] = mapped_column(Float)
+    mean_recall_at_k: Mapped[float] = mapped_column(Float)
+    mean_precision_at_k: Mapped[float] = mapped_column(Float)
+    mean_mrr: Mapped[float] = mapped_column(Float)
+    mean_ndcg: Mapped[float] = mapped_column(Float)
+    mean_answer_relevance: Mapped[float] = mapped_column(Float)
+    mean_citation_correctness: Mapped[float] = mapped_column(Float)
+    mean_safety: Mapped[float] = mapped_column(Float)
+    mean_latency_ms: Mapped[float] = mapped_column(Float)
+    regression_gate_passed: Mapped[bool] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
+
+
+class EvaluationCaseEntity(Base):
+    __tablename__ = "evaluation_case_results"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    run_id: Mapped[str] = mapped_column(ForeignKey("evaluation_runs.id"), index=True)
+    case_id: Mapped[str] = mapped_column(String(100), index=True)
+    trace_id: Mapped[str] = mapped_column(String(64), index=True)
+    recall_at_k: Mapped[float] = mapped_column(Float)
+    precision_at_k: Mapped[float] = mapped_column(Float)
+    mrr: Mapped[float] = mapped_column(Float)
+    ndcg: Mapped[float] = mapped_column(Float)
+    answer_relevance: Mapped[float] = mapped_column(Float)
+    citation_correctness: Mapped[float] = mapped_column(Float)
+    safety: Mapped[float] = mapped_column(Float)
+    retrieval_attempts: Mapped[int] = mapped_column(Integer)
+    latency_ms: Mapped[float] = mapped_column(Float)
+    passed: Mapped[bool] = mapped_column(Boolean)
