@@ -79,12 +79,15 @@ class KnowledgeRepository:
                 session.expunge(item)
             return items
 
-    def versions(self, logical_id: str) -> list[DocumentEntity]:
+    def versions(self, logical_id: str, tenant_id: str | None = None, project_id: str | None = None) -> list[DocumentEntity]:
         with self.sessions() as session:
             items = list(
                 session.scalars(
                     select(DocumentEntity)
-                    .where(DocumentEntity.logical_id == logical_id)
+                    .where(
+                        DocumentEntity.logical_id == logical_id,
+                        *([] if tenant_id is None else [DocumentEntity.tenant_id == tenant_id, DocumentEntity.project_id == project_id]),
+                    )
                     .order_by(DocumentEntity.version.desc())
                 )
             )
@@ -138,9 +141,13 @@ class KnowledgeRepository:
             job.updated_at = datetime.now(UTC)
             session.commit()
 
-    def get_job(self, job_id: str) -> IngestionJobEntity | None:
+    def get_job(self, job_id: str, tenant_id: str | None = None, project_id: str | None = None) -> IngestionJobEntity | None:
         with self.sessions() as session:
             job = session.get(IngestionJobEntity, job_id)
+            if job and tenant_id is not None:
+                document = session.get(DocumentEntity, job.document_id)
+                if not document or document.tenant_id != tenant_id or document.project_id != project_id:
+                    job = None
             if job:
                 session.expunge(job)
             return job
