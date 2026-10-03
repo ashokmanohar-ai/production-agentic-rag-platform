@@ -7,13 +7,47 @@ services:
       OPENSEARCH_URL: http://opensearch:9200
       REDIS_URL: redis://redis:6379/0
       OLLAMA_URL: http://ollama:11434
+      DATABASE_URL: postgresql+psycopg://rag:rag@postgres:5432/rag
     depends_on:
       opensearch:
         condition: service_healthy
-      redis:
+      worker:
+    build: .
+    command: ["python", "-m", "app.worker"]
+    env_file: [.env]
+    environment:
+      OPENSEARCH_URL: http://opensearch:9200
+      OLLAMA_URL: http://ollama:11434
+      DATABASE_URL: postgresql+psycopg://rag:rag@postgres:5432/rag
+    depends_on:
+      postgres:
+        condition: service_healthy
+      opensearch:
         condition: service_healthy
       ollama:
         condition: service_started
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: rag
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: rag
+    ports: ["5432:5432"]
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag -d rag"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   redis:
@@ -46,6 +80,7 @@ services:
 
 volumes:
   ollama-data:
+  postgres-data:
 
 # SECURITY: local development configuration. Enable TLS/authentication,
 # private networking and managed secrets before production deployment.
