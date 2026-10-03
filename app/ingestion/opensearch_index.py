@@ -40,6 +40,18 @@ class OpenSearchChunkIndex:
         }
         await asyncio.to_thread(self.client.indices.create, index=self.index, body=body)
 
+    async def delete_document(self, document_id: str) -> None:
+        exists = await asyncio.to_thread(self.client.indices.exists, index=self.index)
+        if not exists:
+            return
+        await asyncio.to_thread(
+            self.client.delete_by_query,
+            index=self.index,
+            body={"query": {"term": {"document_id": document_id}}},
+            refresh=True,
+            conflicts="proceed",
+        )
+
     async def index_chunks(self, chunks: list[dict[str, object]]) -> int:
         if not chunks:
             return 0
