@@ -73,3 +73,16 @@ async def test_namespace_invalidation() -> None:
     await cache.set_json(cache.key("llm", {"q": 1}), {"text": "x"})
     assert await cache.invalidate_rag() == 2
     assert not redis.values
+
+
+@pytest.mark.asyncio
+async def test_retrieval_cache_isolated_by_tenant_and_version() -> None:
+    cache = RedisCache(FakeRedis(), 300)
+    obs = LangfuseObservability(False)
+    retriever = Retriever()
+    cached = CachedRetriever(retriever, cache, obs, "kb-v2")
+    a = RuntimeContext(top_k=3, use_hybrid=False, model="m", categories=(), max_retrieval_attempts=3, guardrail_threshold=70, tenant_id="a", project_id="p")
+    b = RuntimeContext(top_k=3, use_hybrid=False, model="m", categories=(), max_retrieval_attempts=3, guardrail_threshold=70, tenant_id="b", project_id="p")
+    await cached.search("same query", a)
+    await cached.search("same query", b)
+    assert retriever.calls == 2
