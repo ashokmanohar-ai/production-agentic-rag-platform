@@ -4,14 +4,19 @@ from app.agent.context import RuntimeContext
 from app.retrieval.opensearch import OpenSearchRetriever
 
 
+class FakeEmbeddings:
+    dimensions = 3
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        return [[0.1, 0.2, 0.3] for _ in texts]
+
+
 class FakeOpenSearch:
     def __init__(self) -> None:
-        self.body = None
-        self.params = None
+        self.bodies: list[dict] = []
 
     def search(self, *, index: str, body: dict, params=None) -> dict:
-        self.body = body
-        self.params = params
+        self.bodies.append(body)
         return {"hits": {"hits": []}}
 
 
@@ -27,29 +32,25 @@ def context(hybrid: bool) -> RuntimeContext:
 
 
 @pytest.mark.asyncio
-async def test_hybrid_query_contains_lexical_and_neural_clauses() -> None:
+async def test_hybrid_query_contains_lexical_and_knn_clauses() -> None:
     client = FakeOpenSearch()
-    retriever = OpenSearchRetriever(
-        client, neural_model_id="model-1", search_pipeline="hybrid-pipeline"
-    )
+    retriever = OpenSearchRetriever(client, FakeEmbeddings())
     await retriever.search("agentic rag", context(True))
-    hybrid = client.body["query"]["hybrid"]
-    assert len(hybrid["queries"]) == 2
-    assert "match" in hybrid["queries"][0]["bool"]["must"][0]
-    assert "neural" in hybrid["queries"][1]
-    assert client.params == {"search_pipeline": "hybrid-pipeline"}
+    assert "bool" in client.bodies[0]["query"]
+    assert "knn" in client.bodies[1]["query"]
+    assert client.bodies[1]["query"]["knn"]["embedding"]["vector"] == [0.1, 0.2, 0.3]
 
 
 @pytest.mark.asyncio
-async def test_hybrid_requires_neural_model() -> None:
+async def test_hybrid_requires_embedding_provider() -> None:
     retriever = OpenSearchRetriever(FakeOpenSearch())
-    with pytest.raises(RuntimeError, match="OPENSEARCH_NEURAL_MODEL_ID"):
+    with pytest.raises(RuntimeError, match="embedding provider"):
         await retriever.search("agentic rag", context(True))
 
 
 @pytest.mark.asyncio
-async def test_bm25_does_not_require_neural_model() -> None:
+async def test_bm25_does_not_require_embedding_provider() -> None:
     client = FakeOpenSearch()
     retriever = OpenSearchRetriever(client)
     await retriever.search("agentic rag", context(False))
-    assert "bool" in client.body["query"]
+    assert "bool" in client.bodies[0]["query"]
