@@ -58,7 +58,7 @@ class DurableKnowledgeService:
         self.max_file_bytes = max_file_bytes
 
     async def upload(
-        self, upload: UploadFile, category: str | None = None
+        self, upload: UploadFile, category: str | None = None, tenant_id: str = "default", project_id: str = "default"
     ) -> DurableUploadResponse:
         filename = upload.filename or "upload"
         if Path(filename).suffix.lower() not in SUPPORTED_EXTENSIONS:
@@ -67,7 +67,7 @@ class DurableKnowledgeService:
         if not data or len(data) > self.max_file_bytes:
             raise ValueError("Uploaded file is empty or exceeds the configured size limit")
         digest = hashlib.sha256(data).hexdigest()
-        duplicate = self.repository.find_by_hash(digest)
+        duplicate = self.repository.find_by_hash(digest, tenant_id, project_id)
         if duplicate:
             return DurableUploadResponse(
                 document_id=duplicate.id,
@@ -86,6 +86,8 @@ class DurableKnowledgeService:
             len(data),
             category,
             data,
+            tenant_id=tenant_id,
+            project_id=project_id,
         )
         job = self.repository.create_job(entity.id)
         return DurableUploadResponse(
@@ -150,12 +152,12 @@ class DurableKnowledgeService:
         await self.index.delete_document(document_id)
         return self.repository.delete_document(document_id)
 
-    def get(self, document_id: str) -> DurableDocument | None:
-        entity = self.repository.get_document(document_id)
+    def get(self, document_id: str, tenant_id: str | None = None, project_id: str | None = None) -> DurableDocument | None:
+        entity = self.repository.get_document(document_id, tenant_id, project_id)
         return document_view(entity) if entity else None
 
-    def list(self) -> list[DurableDocument]:
-        return [document_view(item) for item in self.repository.list_documents()]
+    def list(self, tenant_id: str | None = None, project_id: str | None = None) -> list[DurableDocument]:
+        return [document_view(item) for item in self.repository.list_documents(tenant_id, project_id)]
 
     def versions(self, logical_id: str) -> builtins.list[DurableDocument]:
         return [document_view(item) for item in self.repository.versions(logical_id)]
