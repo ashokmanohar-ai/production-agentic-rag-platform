@@ -34,3 +34,19 @@ def test_failed_job_is_requeued_until_attempt_limit() -> None:
     claimed = repo.claim_job()
     repo.finish_job(claimed.id, False, "temporary")
     assert repo.get_job(job.id).status == "queued"
+
+
+def test_documents_are_scoped_by_tenant_and_project() -> None:
+    repo = repository()
+    first = repo.create_document(
+        "logical-a", "a.txt", "text/plain", "tenant-a-hash", 3, None, b"abc",
+        tenant_id="tenant-a", project_id="project-a",
+    )
+    repo.create_document(
+        "logical-b", "b.txt", "text/plain", "tenant-b-hash", 3, None, b"xyz",
+        tenant_id="tenant-b", project_id="project-b",
+    )
+    assert repo.get_document(first.id, "tenant-a", "project-a") is not None
+    assert repo.get_document(first.id, "tenant-b", "project-b") is None
+    scoped = repo.list_documents("tenant-a", "project-a")
+    assert [item.id for item in scoped] == [first.id]
