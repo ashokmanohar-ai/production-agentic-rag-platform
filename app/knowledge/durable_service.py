@@ -1,3 +1,4 @@
+import builtins
 import hashlib
 from pathlib import Path
 from uuid import uuid4
@@ -156,7 +157,7 @@ class DurableKnowledgeService:
     def list(self) -> list[DurableDocument]:
         return [document_view(item) for item in self.repository.list_documents()]
 
-    def versions(self, logical_id: str) -> list[DurableDocument]:
+    def versions(self, logical_id: str) -> builtins.list[DurableDocument]:
         return [document_view(item) for item in self.repository.versions(logical_id)]
 
     def job(self, job_id: str) -> JobRecord | None:
