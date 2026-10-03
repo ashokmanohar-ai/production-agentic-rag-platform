@@ -1,6 +1,7 @@
 from statistics import mean
 from time import perf_counter
 
+from app.evaluation.judge import LLMJudge
 from app.evaluation.metrics import (
     answer_term_relevance,
     citation_correctness,
@@ -14,13 +15,15 @@ from app.evaluation.models import (
     EvaluationRequest,
     EvaluationSummary,
 )
+from app.llm.base import LLMProvider
 from app.models import AskRequest
 from app.services.agentic_rag import AgenticRAGService
 
 
 class EvaluationRunner:
-    def __init__(self, service: AgenticRAGService) -> None:
+    def __init__(self, service: AgenticRAGService, judge_llm: LLMProvider | None = None) -> None:
         self.service = service
+        self.judge_llm = judge_llm
 
     async def run(self, request: EvaluationRequest) -> EvaluationSummary:
         results: list[CaseEvaluation] = []
