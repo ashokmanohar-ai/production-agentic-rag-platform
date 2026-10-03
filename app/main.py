@@ -29,8 +29,9 @@ from app.persistence.repository import KnowledgeRepository
 from app.retrieval.base import Retriever
 from app.retrieval.opensearch import OpenSearchRetriever
 from app.services.agentic_rag import AgenticRAGService
+from app.security import SecurityContext, get_security_context, require_role
 
-app = FastAPI(title="Production Agentic RAG Platform", version="1.9.0")
+app = FastAPI(title="Production Agentic RAG Platform", version="1.10.0")
 document_registry = DocumentRegistry()
 
 
@@ -124,9 +125,13 @@ async def health() -> dict[str, str]:
 
 @app.post("/api/v1/ask", response_model=AskResponse)
 async def ask(
-    request: AskRequest, service: AgenticRAGService = Depends(get_service)
+    request: AskRequest,
+    service: AgenticRAGService = Depends(get_service),
+    security: SecurityContext = Depends(get_security_context),
 ) -> AskResponse:
-    return await service.ask(request)
+    require_role(security, "reader")
+    secured = request.model_copy(update={"tenant_id": security.tenant_id, "project_id": security.project_id})
+    return await service.ask(secured)
 
 
 def get_evaluation_repository(settings: Settings = Depends(get_settings)) -> EvaluationRepository:
@@ -205,8 +210,11 @@ async def compare_evaluations(
 async def ingest(
     request: IngestRequest,
     service: IngestionService = Depends(get_ingestion_service),
+    security: SecurityContext = Depends(get_security_context),
 ) -> IngestResponse:
-    return await service.ingest(request.documents)
+    require_role(security, "contributor")
+    documents = [item.model_copy(update={"tenant_id": security.tenant_id, "project_id": security.project_id}) for item in request.documents]
+    return await service.ingest(documents)
 
 
 @app.post("/api/v1/documents/upload", response_model=UploadResponse)
