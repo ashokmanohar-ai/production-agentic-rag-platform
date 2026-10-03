@@ -21,6 +21,9 @@ class OpenSearchChunkIndex:
             mapping = await asyncio.to_thread(self.client.indices.get_mapping, index=self.index)
             properties = mapping[self.index]["mappings"].get("properties", {})
             vector = properties.get(self.vector_field, {})
+            for field in ("tenant_id", "project_id"):
+                if properties.get(field, {}).get("type") != "keyword":
+                    raise RuntimeError(f"OpenSearch field {field} must be mapped as keyword")
             actual = vector.get("dimension")
             if actual != self.dimensions:
                 raise RuntimeError(
@@ -37,6 +40,8 @@ class OpenSearchChunkIndex:
                     "title": {"type": "text"},
                     "text": {"type": "text"},
                     "category": {"type": "keyword"},
+                    "tenant_id": {"type": "keyword"},
+                    "project_id": {"type": "keyword"},
                     "url": {"type": "keyword", "index": False},
                     "authors": {"type": "keyword"},
                     "chunk_index": {"type": "integer"},
