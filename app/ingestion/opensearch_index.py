@@ -1,25 +1,11 @@
 import asyncio
-from typing import Any, Protocol
-
-
-class IndexClient(Protocol):
-    class Indices(Protocol):
-        def exists(self, *, index: str) -> bool:
-            ...
-
-        def create(self, *, index: str, body: dict[str, object]) -> dict[str, Any]:
-            ...
-
-    indices: Indices
-
-    def bulk(self, *, body: list[dict[str, object]], refresh: bool) -> dict[str, Any]:
-        ...
+from typing import Any
 
 
 class OpenSearchChunkIndex:
     def __init__(
         self,
-        client: IndexClient,
+        client: Any,
         index: str,
         vector_field: str,
         dimensions: int,
