@@ -139,6 +139,12 @@ GET /api/v1/evaluations/compare/{baseline_id}/{current_id}
 
 History exposes quality and latency trends. Run detail returns every case result and trace ID. Comparison calculates baseline-to-current deltas for pass rate, retrieval quality, ranking quality, answer relevance, citation correctness, safety and latency, and explicitly flags a pass-rate quality decrease.
 
+## Advanced semantic evaluation
+
+Phase 9 adds an optional LLM-as-a-Judge layer on top of the deterministic evaluation engine. Set `judge_enabled=true` and provide `judge_model` in an evaluation request to score faithfulness, groundedness, completeness, context relevance, hallucination risk and robustness.
+
+Judge output is constrained to bounded JSON scores. Valid scores can participate in the regression gate through `min_judge_quality` and `max_hallucination`. Judge parsing/provider failures are fail-open and represented through judge coverage rather than terminating the deterministic evaluation run. This keeps deterministic retrieval, citation and safety metrics independently auditable.
+
 ## Visual AI Quality Dashboard
 
 Phase 8 adds a native dashboard at `/dashboard`. It uses the persisted evaluation history and provides:
