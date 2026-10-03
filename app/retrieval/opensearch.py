@@ -1,5 +1,14 @@
-from opensearchpy import AsyncOpenSearch
+import asyncio
+from typing import Any, Protocol
+
 from app.agent.context import RuntimeContext
+
+
+class SearchClient(Protocol):
+    def search(
+        self, *, index: str, body: dict[str, object], params: dict[str, str] | None = None
+    ) -> dict[str, Any]:
+        ...
 
 
 class OpenSearchRetriever:
@@ -7,7 +16,7 @@ class OpenSearchRetriever:
 
     def __init__(
         self,
-        client: AsyncOpenSearch,
+        client: SearchClient,
         index: str = "rag-chunks",
         neural_model_id: str | None = None,
         vector_field: str = "embedding",
@@ -58,7 +67,12 @@ class OpenSearchRetriever:
                 bool_query["filter"] = [category_filter]
             body = {"size": context.top_k, "query": {"bool": bool_query}}
 
-        response = await self.client.search(index=self.index, body=body, params=params or None)
+        response = await asyncio.to_thread(
+            self.client.search,
+            index=self.index,
+            body=body,
+            params=params or None,
+        )
         results: list[dict[str, object]] = []
         for hit in response.get("hits", {}).get("hits", []):
             source = dict(hit.get("_source", {}))
