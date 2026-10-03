@@ -10,11 +10,11 @@ class KnowledgeRepository:
     def __init__(self, sessions: sessionmaker[Session]) -> None:
         self.sessions = sessions
 
-    def find_by_hash(self, sha256: str) -> DocumentEntity | None:
+    def find_by_hash(self, sha256: str, tenant_id: str = "default", project_id: str = "default") -> DocumentEntity | None:
         with self.sessions() as session:
             return session.scalar(
                 select(DocumentEntity)
-                .where(DocumentEntity.sha256 == sha256)
+                .where(DocumentEntity.sha256 == sha256, DocumentEntity.tenant_id == tenant_id, DocumentEntity.project_id == project_id)
                 .order_by(DocumentEntity.version.desc())
             )
 
@@ -28,6 +28,8 @@ class KnowledgeRepository:
         category: str | None,
         content: bytes,
         version: int = 1,
+        tenant_id: str = "default",
+        project_id: str = "default",
     ) -> DocumentEntity:
         entity = DocumentEntity(
             logical_id=logical_id,
@@ -37,6 +39,8 @@ class KnowledgeRepository:
             sha256=sha256,
             size_bytes=size_bytes,
             category=category,
+            tenant_id=tenant_id,
+            project_id=project_id,
             status="queued",
             content=content,
         )
@@ -56,18 +60,21 @@ class KnowledgeRepository:
             session.expunge(job)
         return job
 
-    def get_document(self, document_id: str) -> DocumentEntity | None:
+    def get_document(self, document_id: str, tenant_id: str | None = None, project_id: str | None = None) -> DocumentEntity | None:
         with self.sessions() as session:
             entity = session.get(DocumentEntity, document_id)
+            if entity and tenant_id is not None and (entity.tenant_id != tenant_id or entity.project_id != project_id):
+                entity = None
             if entity:
                 session.expunge(entity)
             return entity
 
-    def list_documents(self) -> list[DocumentEntity]:
+    def list_documents(self, tenant_id: str | None = None, project_id: str | None = None) -> list[DocumentEntity]:
         with self.sessions() as session:
-            items = list(
-                session.scalars(select(DocumentEntity).order_by(DocumentEntity.created_at.desc()))
-            )
+            statement = select(DocumentEntity)
+            if tenant_id is not None:
+                statement = statement.where(DocumentEntity.tenant_id == tenant_id, DocumentEntity.project_id == project_id)
+            items = list(session.scalars(statement.order_by(DocumentEntity.created_at.desc())))
             for item in items:
                 session.expunge(item)
             return items
