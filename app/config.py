@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     embedding_dimensions: int = 768
     ingestion_chunk_size: int = 1200
     ingestion_chunk_overlap: int = 200
+    max_upload_bytes: int = 20_000_000
     langfuse_enabled: bool = False
     langfuse_host: str = "http://localhost:3000"
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
