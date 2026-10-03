@@ -24,6 +24,7 @@ from app.llm.base import LLMProvider
 from app.llm.ollama import OllamaProvider
 from app.models import AskRequest, AskResponse, FeedbackRequest
 from app.observability.langfuse import LangfuseObservability
+from app.persistence.audit import AuditRepository
 from app.persistence.database import build_session_factory
 from app.persistence.repository import KnowledgeRepository
 from app.retrieval.base import Retriever
@@ -31,7 +32,7 @@ from app.retrieval.opensearch import OpenSearchRetriever
 from app.services.agentic_rag import AgenticRAGService
 from app.security import SecurityContext, get_security_context, require_role
 
-app = FastAPI(title="Production Agentic RAG Platform", version="1.10.0")
+app = FastAPI(title="Production Agentic RAG Platform", version="1.10.1")
 document_registry = DocumentRegistry()
 
 
@@ -138,10 +139,16 @@ def get_evaluation_repository(settings: Settings = Depends(get_settings)) -> Eva
     return EvaluationRepository(build_session_factory(settings.database_url))
 
 
+def get_audit_repository(settings: Settings = Depends(get_settings)) -> AuditRepository:
+    return AuditRepository(build_session_factory(settings.database_url))
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def quality_dashboard(
     repository: EvaluationRepository = Depends(get_evaluation_repository),
+    security: SecurityContext = Depends(get_security_context),
 ) -> HTMLResponse:
+    require_role(security, "reader")
     return HTMLResponse(dashboard_html(repository.list_runs(30)))
 
 
@@ -151,7 +158,9 @@ async def run_evaluation(
     service: AgenticRAGService = Depends(get_service),
     repository: EvaluationRepository = Depends(get_evaluation_repository),
     settings: Settings = Depends(get_settings),
+    security: SecurityContext = Depends(get_security_context),
 ) -> EvaluationSummary:
+    require_role(security, "contributor")
     judge_llm: LLMProvider | None = OllamaProvider(settings.ollama_url) if request.judge_enabled else None
     summary = await EvaluationRunner(service, judge_llm).run(request)
     repository.save(summary)
@@ -162,7 +171,9 @@ async def run_evaluation(
 async def evaluation_history(
     limit: int = 50,
     repository: EvaluationRepository = Depends(get_evaluation_repository),
+    security: SecurityContext = Depends(get_security_context),
 ) -> list[dict[str, object]]:
+    require_role(security, "reader")
     safe_limit = min(max(limit, 1), 200)
     return [
         {
@@ -187,7 +198,9 @@ async def evaluation_history(
 async def evaluation_detail(
     run_id: str,
     repository: EvaluationRepository = Depends(get_evaluation_repository),
+    security: SecurityContext = Depends(get_security_context),
 ) -> EvaluationSummary:
+    require_role(security, "reader")
     summary = repository.summary(run_id)
     if not summary:
         raise HTTPException(status_code=404, detail="Evaluation run not found")
