@@ -50,6 +50,32 @@ uvicorn app.main:app --reload
 
 For hybrid retrieval, configure an OpenSearch neural model/index/search pipeline and set the corresponding environment variables. BM25 mode works without the neural model by sending `"use_hybrid": false`.
 
+## Ingestion
+
+Documents can now be chunked, embedded and indexed through `POST /api/v1/ingest`.
+
+```json
+{
+  "documents": [
+    {
+      "document_id": "REQ-101",
+      "title": "RAG Requirements",
+      "text": "Long document content...",
+      "category": "requirements",
+      "authors": ["QE Team"]
+    }
+  ]
+}
+```
+
+The pipeline normalizes text, creates deterministic chunk IDs, generates Ollama embeddings, bootstraps a KNN-capable OpenSearch index, and bulk-indexes structured lineage plus vectors. Re-ingesting an unchanged chunk uses the same OpenSearch document ID.
+
+Pull the configured embedding model before ingestion:
+
+```bash
+docker compose exec ollama ollama pull nomic-embed-text
+```
+
 ## API
 
 ```json
@@ -77,7 +103,7 @@ See `docs/ARCHITECTURE.md`, `docs/EVALUATION.md`, `docs/PRODUCTION_READINESS.md`
 
 Implemented: FastAPI contracts, compiled LangGraph orchestration, BM25/hybrid OpenSearch adapter, Ollama generation, LLM query rewrite, document grading, structured citations, bounded retries, evaluation helpers, Docker services and automated tests.
 
-Still required for enterprise production: identity/RBAC, tenant-aware authorization, durable feedback, active Langfuse tracing, cache integration in graph execution, secret-manager integration, resilience policies, ingestion/index bootstrap automation, security scanning and deployment-specific SLOs.
+Still required for enterprise production: file/PDF parsing and asynchronous ingestion jobs, identity/RBAC, tenant-aware authorization, durable feedback, active Langfuse tracing, cache integration in graph execution, secret-manager integration, resilience policies, security scanning and deployment-specific SLOs.
 
 ## License
 
