@@ -28,10 +28,14 @@ class OpenSearchRetriever:
         self.vector_field = vector_field
         self.search_pipeline = search_pipeline
 
-    def _filter(self, context: RuntimeContext) -> dict[str, object] | None:
-        if not context.categories:
-            return None
-        return {"terms": {"category.keyword": list(context.categories)}}
+    def _filter(self, context: RuntimeContext) -> dict[str, object]:
+        filters: list[dict[str, object]] = [
+            {"term": {"tenant_id.keyword": context.tenant_id}},
+            {"term": {"project_id.keyword": context.project_id}},
+        ]
+        if context.categories:
+            filters.append({"terms": {"category.keyword": list(context.categories)}})
+        return {"bool": {"filter": filters}}
 
     async def search(self, query: str, context: RuntimeContext) -> list[dict[str, object]]:
         category_filter = self._filter(context)
