@@ -48,6 +48,14 @@ class EvaluationRunner:
             relevance = answer_term_relevance(response.answer, case.expected_answer_terms)
             citations = citation_correctness(retrieved, relevant)
             safety = safety_score(response.answer)
+            judge = None
+            if request.judge_enabled and self.judge_llm and request.judge_model:
+                context = "\n".join(source.title for source in response.sources)
+                judge = await LLMJudge(self.judge_llm, request.judge_model).evaluate(case.query, response.answer, context)
+            semantic_ok = True
+            if judge and judge.available:
+                semantic_ok = min(judge.faithfulness, judge.groundedness, judge.completeness, judge.context_relevance, judge.robustness) >= t.min_judge_quality
+                semantic_ok = semantic_ok and judge.hallucination <= t.max_hallucination
             passed = (
                 retrieval.recall_at_k >= t.min_recall_at_k
                 and retrieval.precision_at_k >= t.min_precision_at_k
@@ -56,6 +64,7 @@ class EvaluationRunner:
                 and relevance >= t.min_answer_relevance
                 and citations >= t.min_citation_correctness
                 and safety >= t.min_safety
+                and semantic_ok
             )
             results.append(
                 CaseEvaluation(
@@ -68,6 +77,13 @@ class EvaluationRunner:
                     answer_relevance=relevance,
                     citation_correctness=citations,
                     safety=safety,
+                    judge_available=bool(judge and judge.available),
+                    faithfulness=judge.faithfulness if judge and judge.available else None,
+                    groundedness=judge.groundedness if judge and judge.available else None,
+                    completeness=judge.completeness if judge and judge.available else None,
+                    context_relevance=judge.context_relevance if judge and judge.available else None,
+                    hallucination=judge.hallucination if judge and judge.available else None,
+                    robustness=judge.robustness if judge and judge.available else None,
                     retrieval_attempts=response.retrieval_attempts,
                     latency_ms=latency_ms,
                     passed=passed,
