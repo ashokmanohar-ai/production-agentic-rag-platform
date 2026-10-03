@@ -37,4 +37,5 @@ jobs:
       - run: ruff check .
       - run: mypy app
       - run: pytest -q --cov=app --cov-report=term-missing
-      - run: alembic upgrade head
+      - run: python scripts/bootstrap_schema.py
+      - run: alembic stamp head
