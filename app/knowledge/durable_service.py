@@ -159,9 +159,9 @@ class DurableKnowledgeService:
     def list(self, tenant_id: str | None = None, project_id: str | None = None) -> list[DurableDocument]:
         return [document_view(item) for item in self.repository.list_documents(tenant_id, project_id)]
 
-    def versions(self, logical_id: str) -> builtins.list[DurableDocument]:
-        return [document_view(item) for item in self.repository.versions(logical_id)]
+    def versions(self, logical_id: str, tenant_id: str | None = None, project_id: str | None = None) -> builtins.list[DurableDocument]:
+        return [document_view(item) for item in self.repository.versions(logical_id, tenant_id, project_id)]
 
-    def job(self, job_id: str) -> JobRecord | None:
-        entity = self.repository.get_job(job_id)
+    def job(self, job_id: str, tenant_id: str | None = None, project_id: str | None = None) -> JobRecord | None:
+        entity = self.repository.get_job(job_id, tenant_id, project_id)
         return job_view(entity) if entity else None
