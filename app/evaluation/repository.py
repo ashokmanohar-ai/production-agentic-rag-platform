@@ -10,7 +10,7 @@ class EvaluationRepository:
     def __init__(self, sessions: sessionmaker[Session]) -> None:
         self.sessions = sessions
 
-    def save(self, summary: EvaluationSummary) -> str:
+    def save(\n        self, summary: EvaluationSummary, tenant_id: str = "default", project_id: str = "default"\n    ) -> str:
         run = EvaluationRunEntity(
             dataset_name=summary.dataset_name,
             dataset_version=summary.dataset_version,
