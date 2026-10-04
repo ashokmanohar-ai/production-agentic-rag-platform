@@ -37,6 +37,7 @@ from app.observability.metrics import (
 from app.persistence.audit import AuditRepository
 from app.persistence.database import build_session_factory
 from app.persistence.repository import KnowledgeRepository
+from app.persistence.trace_ownership import TraceOwnershipRepository
 from app.retrieval.base import Retriever
 from app.retrieval.opensearch import OpenSearchRetriever
 from app.services.agentic_rag import AgenticRAGService
