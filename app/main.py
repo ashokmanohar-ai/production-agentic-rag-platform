@@ -1,4 +1,6 @@
-from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, UploadFile
+from collections.abc import Callable
+
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from opensearchpy import OpenSearch
 from redis.asyncio import Redis
@@ -47,7 +49,7 @@ document_registry = DocumentRegistry()
 
 
 @app.middleware("http")
-async def operational_middleware(request, call_next):
+async def operational_middleware(request: Request, call_next: Callable) -> Response:
     import time
 
     cid = new_correlation_id(request.headers.get("X-Correlation-ID"))
@@ -184,7 +186,9 @@ async def health() -> dict[str, str]:
 async def ready(settings: Settings = Depends(get_settings)) -> dict[str, object]:
     diagnostics = RuntimeDiagnostics(settings, build_session_factory(settings.database_url))
     result = await diagnostics.check()
-    for name, value in result["dependencies"].items():
+    dependencies = result.get("dependencies", {})
+    assert isinstance(dependencies, dict)
+    for name, value in dependencies.items():
         READINESS.labels(name).set(1 if value["status"] == "ok" else 0)
     if result["status"] != "ready":
         raise HTTPException(status_code=503, detail=result)
