@@ -44,7 +44,7 @@ from app.security import SecurityContext, get_security_context, require_role
 from app.runtime import RuntimeDiagnostics
 
 configure_logging()
-app = FastAPI(title="Production Agentic RAG Platform", version="1.15.0")
+app = FastAPI(title="Production Agentic RAG Platform", version="1.16.0")
 document_registry = DocumentRegistry()
 
 
