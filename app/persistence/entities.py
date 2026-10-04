@@ -51,6 +51,8 @@ class EvaluationRunEntity(Base):
     __tablename__ = "evaluation_runs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    tenant_id: Mapped[str] = mapped_column(String(100), index=True, default="default")
+    project_id: Mapped[str] = mapped_column(String(100), index=True, default="default")
     dataset_name: Mapped[str] = mapped_column(String(200), index=True)
     dataset_version: Mapped[str] = mapped_column(String(50), index=True)
     cases: Mapped[int] = mapped_column(Integer)
@@ -114,3 +116,13 @@ class MembershipEntity(Base):
     role: Mapped[str] = mapped_column(String(30))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class TraceOwnershipEntity(Base):
+    __tablename__ = "trace_ownership"
+
+    trace_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    subject: Mapped[str] = mapped_column(String(200), index=True)
+    tenant_id: Mapped[str] = mapped_column(String(100), index=True)
+    project_id: Mapped[str] = mapped_column(String(100), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)

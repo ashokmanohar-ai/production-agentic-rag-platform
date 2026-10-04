@@ -44,7 +44,7 @@ from app.security import SecurityContext, get_security_context, require_role
 from app.runtime import RuntimeDiagnostics
 
 configure_logging()
-app = FastAPI(title="Production Agentic RAG Platform", version="1.15.0")
+app = FastAPI(title="Production Agentic RAG Platform", version="1.16.0")
 document_registry = DocumentRegistry()
 
 
@@ -223,7 +223,7 @@ async def quality_dashboard(
     security: SecurityContext = Depends(get_security_context),
 ) -> HTMLResponse:
     require_role(security, "reader")
-    return HTMLResponse(dashboard_html(repository.list_runs(30)))
+    return HTMLResponse(dashboard_html(repository.list_runs(30, security.tenant_id, security.project_id)))
 
 
 @app.post("/api/v1/evaluations/run", response_model=EvaluationSummary)
@@ -237,7 +237,7 @@ async def run_evaluation(
     require_role(security, "contributor")
     judge_llm: LLMProvider | None = OllamaProvider(settings.ollama_url, settings.ollama_timeout_seconds) if request.judge_enabled else None
     summary = await EvaluationRunner(service, judge_llm).run(request)
-    repository.save(summary)
+    repository.save(summary, security.tenant_id, security.project_id)
     return summary
 
 
@@ -264,7 +264,7 @@ async def evaluation_history(
             "regression_gate_passed": item.regression_gate_passed,
             "created_at": item.created_at.isoformat(),
         }
-        for item in repository.list_runs(safe_limit)
+        for item in repository.list_runs(safe_limit, security.tenant_id, security.project_id)
     ]
 
 
@@ -275,7 +275,8 @@ async def evaluation_detail(
     security: SecurityContext = Depends(get_security_context),
 ) -> EvaluationSummary:
     require_role(security, "reader")
-    summary = repository.summary(run_id)
+    scoped_run = repository.get_run(run_id, security.tenant_id, security.project_id)
+    summary = repository.summary(run_id) if scoped_run else None
     if not summary:
         raise HTTPException(status_code=404, detail="Evaluation run not found")
     return summary
@@ -289,7 +290,9 @@ async def compare_evaluations(
     security: SecurityContext = Depends(get_security_context),
 ) -> EvaluationComparison:
     require_role(security, "reader")
-    comparison = repository.compare(baseline_id, current_id)
+    baseline = repository.get_run(baseline_id, security.tenant_id, security.project_id)
+    current = repository.get_run(current_id, security.tenant_id, security.project_id)
+    comparison = repository.compare(baseline_id, current_id) if baseline and current else None
     if not comparison:
         raise HTTPException(status_code=404, detail="Evaluation run not found")
     return comparison
@@ -312,18 +315,24 @@ async def upload_document(
     file: UploadFile = File(...),
     category: str | None = Form(default=None),
     service: KnowledgeService = Depends(get_knowledge_service),
+    security: SecurityContext = Depends(get_security_context),
 ) -> UploadResponse:
-    try:
-        return await service.queue_upload(file, background_tasks, category)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    require_role(security, "contributor")
+    raise HTTPException(
+        status_code=410,
+        detail="Legacy in-memory document API is retired; use /api/v1/durable/documents/upload",
+    )
 
 
 @app.get("/api/v1/documents", response_model=list[DocumentRecord])
 async def list_documents(
     service: KnowledgeService = Depends(get_knowledge_service),
+    security: SecurityContext = Depends(get_security_context),
 ) -> list[DocumentRecord]:
-    return service.list()
+    require_role(security, "reader")
+    raise HTTPException(
+        status_code=410, detail="Legacy in-memory document API is retired"
+    )
 
 
 @app.get("/api/v1/documents/{document_id}", response_model=DocumentRecord)
@@ -331,10 +340,7 @@ async def get_document(
     document_id: str,
     service: KnowledgeService = Depends(get_knowledge_service),
 ) -> DocumentRecord:
-    record = service.get(document_id)
-    if record is None:
-        raise HTTPException(status_code=404, detail="Document not found")
-    return record
+    raise HTTPException(status_code=410, detail="Legacy in-memory document API is retired")
 
 
 

@@ -1,7 +1,7 @@
 import hashlib
 import hmac
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import Literal
 
 import jwt
 from fastapi import Header, HTTPException
@@ -79,14 +79,11 @@ def get_security_context(
         raise HTTPException(status_code=400, detail="Tenant and project headers are required")
     token = authorization.removeprefix("Bearer ").strip()
     subject = authenticate_subject(token, settings)
-    if settings.oidc_enabled and token.count(".") == 2:
-        from app.persistence.membership import MembershipRepository
-        role = MembershipRepository(build_session_factory(settings.database_url)).role_for(
-            subject, x_tenant_id, x_project_id
-        )
-        if role is None:
-            raise HTTPException(status_code=403, detail="No active tenant/project membership")
-        return SecurityContext(subject, x_tenant_id, x_project_id, role)
-    if x_role not in _ROLE_LEVEL:
-        raise HTTPException(status_code=403, detail="Valid role header required")
-    return SecurityContext(subject, x_tenant_id, x_project_id, cast(Role, x_role))
+    from app.persistence.membership import MembershipRepository
+
+    role = MembershipRepository(build_session_factory(settings.database_url)).role_for(
+        subject, x_tenant_id, x_project_id
+    )
+    if role is None:
+        raise HTTPException(status_code=403, detail="No active tenant/project membership")
+    return SecurityContext(subject, x_tenant_id, x_project_id, role)

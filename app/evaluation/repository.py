@@ -10,8 +10,12 @@ class EvaluationRepository:
     def __init__(self, sessions: sessionmaker[Session]) -> None:
         self.sessions = sessions
 
-    def save(self, summary: EvaluationSummary) -> str:
+    def save(
+        self, summary: EvaluationSummary, tenant_id: str = "default", project_id: str = "default"
+    ) -> str:
         run = EvaluationRunEntity(
+            tenant_id=tenant_id,
+            project_id=project_id,
             dataset_name=summary.dataset_name,
             dataset_version=summary.dataset_version,
             cases=summary.cases,
@@ -49,16 +53,32 @@ class EvaluationRepository:
             session.commit()
             return run.id
 
-    def list_runs(self, limit: int = 50) -> list[EvaluationRunEntity]:
+    def list_runs(
+        self, limit: int = 50, tenant_id: str | None = None, project_id: str | None = None
+    ) -> list[EvaluationRunEntity]:
         with self.sessions() as session:
-            items = list(session.scalars(select(EvaluationRunEntity).order_by(EvaluationRunEntity.created_at.desc()).limit(limit)))
+            statement = select(EvaluationRunEntity)
+            if tenant_id is not None:
+                statement = statement.where(
+                    EvaluationRunEntity.tenant_id == tenant_id,
+                    EvaluationRunEntity.project_id == project_id,
+                )
+            items = list(session.scalars(
+                statement.order_by(EvaluationRunEntity.created_at.desc()).limit(limit)
+            ))
             for item in items:
                 session.expunge(item)
             return items
 
-    def get_run(self, run_id: str) -> EvaluationRunEntity | None:
+    def get_run(
+        self, run_id: str, tenant_id: str | None = None, project_id: str | None = None
+    ) -> EvaluationRunEntity | None:
         with self.sessions() as session:
             item = session.get(EvaluationRunEntity, run_id)
+            if item and tenant_id is not None and (
+                item.tenant_id != tenant_id or item.project_id != project_id
+            ):
+                item = None
             if item:
                 session.expunge(item)
             return item
