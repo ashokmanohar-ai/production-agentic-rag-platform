@@ -1,5 +1,5 @@
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from opensearchpy import OpenSearch
 from redis.asyncio import Redis
 
@@ -24,6 +24,14 @@ from app.llm.base import LLMProvider
 from app.llm.ollama import OllamaProvider
 from app.models import AskRequest, AskResponse, FeedbackRequest
 from app.observability.langfuse import LangfuseObservability
+from app.observability.logging import configure_logging, correlation_id, new_correlation_id
+from app.observability.metrics import (
+    READINESS,
+    REQUEST_LATENCY,
+    REQUESTS,
+    metrics_payload,
+    slo_window,
+)
 from app.persistence.audit import AuditRepository
 from app.persistence.database import build_session_factory
 from app.persistence.repository import KnowledgeRepository
@@ -33,8 +41,48 @@ from app.services.agentic_rag import AgenticRAGService
 from app.security import SecurityContext, get_security_context, require_role
 from app.runtime import RuntimeDiagnostics
 
-app = FastAPI(title="Production Agentic RAG Platform", version="1.14.0")
+configure_logging()
+app = FastAPI(title="Production Agentic RAG Platform", version="1.15.0")
 document_registry = DocumentRegistry()
+
+
+@app.middleware("http")
+async def operational_middleware(request, call_next):
+    import time
+
+    cid = new_correlation_id(request.headers.get("X-Correlation-ID"))
+    token = correlation_id.set(cid)
+    started = time.perf_counter()
+    status = 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        response.headers["X-Correlation-ID"] = cid
+        return response
+    finally:
+        elapsed = time.perf_counter() - started
+        route = request.scope.get("route")
+        path = getattr(route, "path", request.url.path)
+        REQUESTS.labels(request.method, path, str(status)).inc()
+        REQUEST_LATENCY.labels(request.method, path).observe(elapsed)
+        if path == "/api/v1/ask":
+            slo_window.observe(elapsed, status >= 500)
+        correlation_id.reset(token)
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics() -> Response:
+    payload, content_type = metrics_payload()
+    return Response(content=payload, media_type=content_type)
+
+
+@app.get("/api/v1/operations/slo")
+async def slo_snapshot(
+    security: SecurityContext = Depends(get_security_context),
+) -> dict[str, object]:
+    require_role(security, "admin")
+    return slo_window.snapshot()
+
 
 
 def _opensearch(settings: Settings) -> OpenSearch:
@@ -135,6 +183,8 @@ async def health() -> dict[str, str]:
 async def ready(settings: Settings = Depends(get_settings)) -> dict[str, object]:
     diagnostics = RuntimeDiagnostics(settings, build_session_factory(settings.database_url))
     result = await diagnostics.check()
+    for name, value in result["dependencies"].items():
+        READINESS.labels(name).set(1 if value["status"] == "ok" else 0)
     if result["status"] != "ready":
         raise HTTPException(status_code=503, detail=result)
     return result
