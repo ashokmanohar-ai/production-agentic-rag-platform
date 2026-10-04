@@ -275,7 +275,8 @@ async def evaluation_detail(
     security: SecurityContext = Depends(get_security_context),
 ) -> EvaluationSummary:
     require_role(security, "reader")
-    summary = repository.summary(run_id)
+    scoped_run = repository.get_run(run_id, security.tenant_id, security.project_id)
+    summary = repository.summary(run_id) if scoped_run else None
     if not summary:
         raise HTTPException(status_code=404, detail="Evaluation run not found")
     return summary
@@ -289,7 +290,9 @@ async def compare_evaluations(
     security: SecurityContext = Depends(get_security_context),
 ) -> EvaluationComparison:
     require_role(security, "reader")
-    comparison = repository.compare(baseline_id, current_id)
+    baseline = repository.get_run(baseline_id, security.tenant_id, security.project_id)
+    current = repository.get_run(current_id, security.tenant_id, security.project_id)
+    comparison = repository.compare(baseline_id, current_id) if baseline and current else None
     if not comparison:
         raise HTTPException(status_code=404, detail="Evaluation run not found")
     return comparison
