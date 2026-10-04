@@ -223,7 +223,7 @@ async def quality_dashboard(
     security: SecurityContext = Depends(get_security_context),
 ) -> HTMLResponse:
     require_role(security, "reader")
-    return HTMLResponse(dashboard_html(repository.list_runs(30)))
+    return HTMLResponse(dashboard_html(repository.list_runs(30, security.tenant_id, security.project_id)))
 
 
 @app.post("/api/v1/evaluations/run", response_model=EvaluationSummary)
@@ -237,7 +237,7 @@ async def run_evaluation(
     require_role(security, "contributor")
     judge_llm: LLMProvider | None = OllamaProvider(settings.ollama_url, settings.ollama_timeout_seconds) if request.judge_enabled else None
     summary = await EvaluationRunner(service, judge_llm).run(request)
-    repository.save(summary)
+    repository.save(summary, security.tenant_id, security.project_id)
     return summary
 
 
@@ -264,7 +264,7 @@ async def evaluation_history(
             "regression_gate_passed": item.regression_gate_passed,
             "created_at": item.created_at.isoformat(),
         }
-        for item in repository.list_runs(safe_limit)
+        for item in repository.list_runs(safe_limit, security.tenant_id, security.project_id)
     ]
 
 
