@@ -12,6 +12,8 @@ class EvaluationRepository:
 
     def save(\n        self, summary: EvaluationSummary, tenant_id: str = "default", project_id: str = "default"\n    ) -> str:
         run = EvaluationRunEntity(
+            tenant_id=tenant_id,
+            project_id=project_id,
             dataset_name=summary.dataset_name,
             dataset_version=summary.dataset_version,
             cases=summary.cases,
