@@ -340,10 +340,7 @@ async def get_document(
     document_id: str,
     service: KnowledgeService = Depends(get_knowledge_service),
 ) -> DocumentRecord:
-    record = service.get(document_id)
-    if record is None:
-        raise HTTPException(status_code=404, detail="Document not found")
-    return record
+    raise HTTPException(status_code=410, detail="Legacy in-memory document API is retired")
 
 
 
