@@ -1,5 +1,7 @@
-from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse
+from collections.abc import Awaitable, Callable
+
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import HTMLResponse, Response
 from opensearchpy import OpenSearch
 from redis.asyncio import Redis
 
@@ -24,6 +26,14 @@ from app.llm.base import LLMProvider
 from app.llm.ollama import OllamaProvider
 from app.models import AskRequest, AskResponse, FeedbackRequest
 from app.observability.langfuse import LangfuseObservability
+from app.observability.logging import configure_logging, correlation_id, new_correlation_id
+from app.observability.metrics import (
+    READINESS,
+    REQUEST_LATENCY,
+    REQUESTS,
+    metrics_payload,
+    slo_window,
+)
 from app.persistence.audit import AuditRepository
 from app.persistence.database import build_session_factory
 from app.persistence.repository import KnowledgeRepository
@@ -33,8 +43,50 @@ from app.services.agentic_rag import AgenticRAGService
 from app.security import SecurityContext, get_security_context, require_role
 from app.runtime import RuntimeDiagnostics
 
-app = FastAPI(title="Production Agentic RAG Platform", version="1.14.0")
+configure_logging()
+app = FastAPI(title="Production Agentic RAG Platform", version="1.15.0")
 document_registry = DocumentRegistry()
+
+
+@app.middleware("http")
+async def operational_middleware(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    import time
+
+    cid = new_correlation_id(request.headers.get("X-Correlation-ID"))
+    token = correlation_id.set(cid)
+    started = time.perf_counter()
+    status = 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        response.headers["X-Correlation-ID"] = cid
+        return response
+    finally:
+        elapsed = time.perf_counter() - started
+        route = request.scope.get("route")
+        path = getattr(route, "path", request.url.path)
+        REQUESTS.labels(request.method, path, str(status)).inc()
+        REQUEST_LATENCY.labels(request.method, path).observe(elapsed)
+        if path == "/api/v1/ask":
+            slo_window.observe(elapsed, status >= 500)
+        correlation_id.reset(token)
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics() -> Response:
+    payload, content_type = metrics_payload()
+    return Response(content=payload, media_type=content_type)
+
+
+@app.get("/api/v1/operations/slo")
+async def slo_snapshot(
+    security: SecurityContext = Depends(get_security_context),
+) -> dict[str, object]:
+    require_role(security, "admin")
+    return slo_window.snapshot()
+
 
 
 def _opensearch(settings: Settings) -> OpenSearch:
@@ -63,6 +115,7 @@ def get_service(settings: Settings = Depends(get_settings)) -> AgenticRAGService
         settings.ollama_url,
         settings.embedding_model,
         settings.embedding_dimensions,
+        settings.ollama_timeout_seconds,
     )
     retriever: Retriever = OpenSearchRetriever(
         _opensearch(settings),
@@ -70,7 +123,7 @@ def get_service(settings: Settings = Depends(get_settings)) -> AgenticRAGService
         index=settings.opensearch_index,
         vector_field=settings.opensearch_vector_field,
     )
-    llm: LLMProvider = OllamaProvider(settings.ollama_url)
+    llm: LLMProvider = OllamaProvider(settings.ollama_url, settings.ollama_timeout_seconds)
     observability = _observability(settings)
     cache = _cache(settings)
     if cache:
@@ -135,6 +188,11 @@ async def health() -> dict[str, str]:
 async def ready(settings: Settings = Depends(get_settings)) -> dict[str, object]:
     diagnostics = RuntimeDiagnostics(settings, build_session_factory(settings.database_url))
     result = await diagnostics.check()
+    dependencies = result.get("dependencies", {})
+    assert isinstance(dependencies, dict)
+    for name, value in dependencies.items():
+        if isinstance(value, dict):
+            READINESS.labels(str(name)).set(1 if value.get("status") == "ok" else 0)
     if result["status"] != "ready":
         raise HTTPException(status_code=503, detail=result)
     return result
@@ -177,7 +235,7 @@ async def run_evaluation(
     security: SecurityContext = Depends(get_security_context),
 ) -> EvaluationSummary:
     require_role(security, "contributor")
-    judge_llm: LLMProvider | None = OllamaProvider(settings.ollama_url) if request.judge_enabled else None
+    judge_llm: LLMProvider | None = OllamaProvider(settings.ollama_url, settings.ollama_timeout_seconds) if request.judge_enabled else None
     summary = await EvaluationRunner(service, judge_llm).run(request)
     repository.save(summary)
     return summary

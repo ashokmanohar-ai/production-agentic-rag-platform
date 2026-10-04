@@ -1,3 +1,5 @@
+import time
+from typing import Literal
 from uuid import uuid4
 
 from app.observability.langfuse import LangfuseObservability
@@ -8,6 +10,7 @@ from app.agent.state import AgentState
 from app.llm.base import LLMProvider
 from app.models import AskRequest, AskResponse
 from app.retrieval.base import Retriever
+from app.observability.metrics import RAG_LATENCY, RAG_REQUESTS, RAG_SOURCES
 
 
 class AgenticRAGService:
@@ -26,6 +29,7 @@ class AgenticRAGService:
 
     async def ask(self, request: AskRequest) -> AskResponse:
         trace_id = uuid4().hex
+        started = time.perf_counter()
         context = RuntimeContext(
             top_k=request.top_k,
             use_hybrid=request.use_hybrid,
@@ -61,12 +65,17 @@ class AgenticRAGService:
             answer = "I cannot process that request."
         elif not answer:
             answer = "No sufficiently relevant evidence was found after bounded retrieval attempts."
+        sources = state.get("sources", [])
+        mode: Literal["hybrid", "bm25"] = "hybrid" if request.use_hybrid else "bm25"
+        RAG_REQUESTS.labels(mode, "allowed" if allowed else "blocked").inc()
+        RAG_LATENCY.labels(mode).observe(time.perf_counter() - started)
+        RAG_SOURCES.observe(len(sources))
         return AskResponse(
             query=request.query,
             answer=answer,
-            sources=state.get("sources", []),
+            sources=sources,
             reasoning_steps=state.get("reasoning_steps", []),
             retrieval_attempts=state.get("retrieval_attempts", 0),
-            search_mode="hybrid" if request.use_hybrid else "bm25",
+            search_mode=mode,
             trace_id=trace_id,
         )
