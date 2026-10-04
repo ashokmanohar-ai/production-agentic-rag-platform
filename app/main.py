@@ -315,18 +315,24 @@ async def upload_document(
     file: UploadFile = File(...),
     category: str | None = Form(default=None),
     service: KnowledgeService = Depends(get_knowledge_service),
+    security: SecurityContext = Depends(get_security_context),
 ) -> UploadResponse:
-    try:
-        return await service.queue_upload(file, background_tasks, category)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    require_role(security, "contributor")
+    raise HTTPException(
+        status_code=410,
+        detail="Legacy in-memory document API is retired; use /api/v1/durable/documents/upload",
+    )
 
 
 @app.get("/api/v1/documents", response_model=list[DocumentRecord])
 async def list_documents(
     service: KnowledgeService = Depends(get_knowledge_service),
+    security: SecurityContext = Depends(get_security_context),
 ) -> list[DocumentRecord]:
-    return service.list()
+    require_role(security, "reader")
+    raise HTTPException(
+        status_code=410, detail="Legacy in-memory document API is retired"
+    )
 
 
 @app.get("/api/v1/documents/{document_id}", response_model=DocumentRecord)
