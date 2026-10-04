@@ -33,7 +33,7 @@ from app.services.agentic_rag import AgenticRAGService
 from app.security import SecurityContext, get_security_context, require_role
 from app.runtime import RuntimeDiagnostics
 
-app = FastAPI(title="Production Agentic RAG Platform", version="1.13.0")
+app = FastAPI(title="Production Agentic RAG Platform", version="1.14.0")
 document_registry = DocumentRegistry()
 
 
