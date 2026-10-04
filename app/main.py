@@ -111,6 +111,7 @@ def get_service(settings: Settings = Depends(get_settings)) -> AgenticRAGService
         settings.ollama_url,
         settings.embedding_model,
         settings.embedding_dimensions,
+        settings.ollama_timeout_seconds,
     )
     retriever: Retriever = OpenSearchRetriever(
         _opensearch(settings),
@@ -118,7 +119,7 @@ def get_service(settings: Settings = Depends(get_settings)) -> AgenticRAGService
         index=settings.opensearch_index,
         vector_field=settings.opensearch_vector_field,
     )
-    llm: LLMProvider = OllamaProvider(settings.ollama_url)
+    llm: LLMProvider = OllamaProvider(settings.ollama_url, settings.ollama_timeout_seconds)
     observability = _observability(settings)
     cache = _cache(settings)
     if cache:
@@ -227,7 +228,7 @@ async def run_evaluation(
     security: SecurityContext = Depends(get_security_context),
 ) -> EvaluationSummary:
     require_role(security, "contributor")
-    judge_llm: LLMProvider | None = OllamaProvider(settings.ollama_url) if request.judge_enabled else None
+    judge_llm: LLMProvider | None = OllamaProvider(settings.ollama_url, settings.ollama_timeout_seconds) if request.judge_enabled else None
     summary = await EvaluationRunner(service, judge_llm).run(request)
     repository.save(summary)
     return summary
