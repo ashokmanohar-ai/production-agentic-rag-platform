@@ -1,4 +1,5 @@
 import time
+from typing import Literal
 from uuid import uuid4
 
 from app.observability.langfuse import LangfuseObservability
@@ -65,7 +66,7 @@ class AgenticRAGService:
         elif not answer:
             answer = "No sufficiently relevant evidence was found after bounded retrieval attempts."
         sources = state.get("sources", [])
-        mode = "hybrid" if request.use_hybrid else "bm25"
+        mode: Literal["hybrid", "bm25"] = "hybrid" if request.use_hybrid else "bm25"
         RAG_REQUESTS.labels(mode, "allowed" if allowed else "blocked").inc()
         RAG_LATENCY.labels(mode).observe(time.perf_counter() - started)
         RAG_SOURCES.observe(len(sources))
