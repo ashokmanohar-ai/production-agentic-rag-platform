@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import threading
 import time
-from collections import defaultdict
-
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 
 REQUESTS = Counter(
