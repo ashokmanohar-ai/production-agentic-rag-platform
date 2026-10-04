@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, Response
@@ -49,7 +49,9 @@ document_registry = DocumentRegistry()
 
 
 @app.middleware("http")
-async def operational_middleware(request: Request, call_next: Callable) -> Response:
+async def operational_middleware(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
     import time
 
     cid = new_correlation_id(request.headers.get("X-Correlation-ID"))
@@ -189,7 +191,8 @@ async def ready(settings: Settings = Depends(get_settings)) -> dict[str, object]
     dependencies = result.get("dependencies", {})
     assert isinstance(dependencies, dict)
     for name, value in dependencies.items():
-        READINESS.labels(name).set(1 if value["status"] == "ok" else 0)
+        if isinstance(value, dict):
+            READINESS.labels(str(name)).set(1 if value.get("status") == "ok" else 0)
     if result["status"] != "ready":
         raise HTTPException(status_code=503, detail=result)
     return result
