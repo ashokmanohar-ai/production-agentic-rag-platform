@@ -17,7 +17,7 @@ app.dependency_overrides[get_service] = fake_service
 
 
 class FakeEvaluationRepository:
-    def save(self, summary: object) -> str:
+    def save(self, summary: object, tenant_id: str = "default", project_id: str = "default") -> str:
         return "run-1"
 
 
